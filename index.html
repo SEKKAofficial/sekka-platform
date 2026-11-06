@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#075C43">
+
+  <title>سِكّة | مشوارك أسهل</title>
+
+  <meta name="description" content="سِكّة لخدمات النقل الذكي في مركز رشيد بمحافظة البحيرة">
+
+</head>
+
+<body>
+
+  <!-- =================================
+       1. شاشة البداية - Splash Screen
+  ================================== -->
+
+  <section id="splash-screen" class="screen splash-screen">
+
+    <div class="splash-content">
+
+      <!-- استبدل المسار بملف شعار سِكّة الأصلي لاحقًا -->
+      <div class="brand-logo">
+        <img
+          src="sekka-logo.png"
+          alt="شعار سِكّة"
+          class="logo-image"
+        >
+      </div>
+
+      <h1 class="brand-name">سِكّة</h1>
+
+      <p class="brand-slogan">مشوارك أسهل</p>
+
+      <p class="brand-description">
+        وسيلة أسهل لتنظيم مشاويرك داخل رشيد والمناطق المحيطة
+      </p>
+
+      <a href="#role-selection" class="primary-button">
+        ابدأ الآن
+      </a>
+
+    </div>
+
+    <div class="splash-footer">
+      <p>SEKKA © 2026</p>
+    </div>
+
+  </section>
+
+
+  <!-- =================================
+       2. اختيار نوع المستخدم
+  ================================== -->
+
+  <section id="role-selection" class="screen role-selection">
+
+    <div class="section-header">
+
+      <div class="small-logo">سِكّة</div>
+
+      <h2>أهلاً بيك في سِكّة</h2>
+
+      <p>تحب تستخدم سِكّة بصفتك إيه؟</p>
+
+    </div>
+
+    <div class="role-options">
+
+      <!-- اختيار الراكب -->
+
+      <a href="#passenger-waiting" class="role-card">
+
+        <div class="role-icon">🚕</div>
+
+        <div class="role-info">
+
+          <h3>أنا راكب</h3>
+
+          <p>اطلب مشوارك بسهولة وأمان</p>
+
+        </div>
+
+        <span class="arrow">←</span>
+
+      </a>
+
+
+      <!-- اختيار السائق -->
+
+      <a href="#driver-registration" class="role-card">
+
+        <div class="role-icon">🚗</div>
+
+        <div class="role-info">
+
+          <h3>أنا سائق</h3>
+
+          <p>انضم إلى سِكّة وابدأ استقبال الرحلات بعد قبول طلبك</p>
+
+        </div>
+
+        <span class="arrow">←</span>
+
+      </a>
+
+    </div>
+
+    <a href="#splash-screen" class="back-link">
+      العودة
+    </a>
+
+  </section>
+
+
+  <!-- =================================
+       3. شاشة انتظار الراكب
+  ================================== -->
+
+  <section id="passenger-waiting" class="screen passenger-waiting">
+
+    <div class="waiting-content">
+
+      <div class="waiting-icon">🚕</div>
+
+      <h2>سِكّة جاية توصلك!</h2>
+
+      <p>
+        بنجهز تجربة الراكب علشان تقدر تطلب مشوارك
+        بسهولة داخل رشيد والمناطق المحيطة.
+      </p>
+
+      <div class="status-message">
+        <span class="status-dot"></span>
+        خدمة الركاب قيد التجهيز
+      </div>
+
+      <p class="waiting-note">
+        تابعنا علشان تكون من أول المستخدمين عند إطلاق الخدمة.
+      </p>
+
+      <a href="#role-selection" class="secondary-button">
+        العودة
+      </a>
+
+    </div>
+
+  </section>
+
+
+  <!-- =================================
+       4. تسجيل السائق
+  ================================== -->
+
+  <section id="driver-registration" class="screen driver-registration">
+
+    <div class="registration-header">
+
+      <div class="small-logo">سِكّة</div>
+
+      <h2>انضم إلى سِكّة</h2>
+
+      <p>
+        سجّل بياناتك وبيانات مركبتك للانضمام إلى شبكة السائقين.
+      </p>
+
+      <div class="registration-notice">
+        إرسال الطلب لا يعني قبولك تلقائيًا.
+        سيتم مراجعة البيانات قبل تفعيل حسابك.
+      </div>
+
+    </div>
+
+
+    <form id="driver-form" enctype="multipart/form-data">
+
+      <!-- =================================
+           القسم الأول: البيانات الشخصية
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>البيانات الشخصية</legend>
+
+        <div class="form-group">
+
+          <label for="driver-name">الاسم بالكامل *</label>
+
+          <input
+            type="text"
+            id="driver-name"
+            name="full_name"
+            placeholder="اكتب اسمك بالكامل"
+            autocomplete="name"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="birth-date">تاريخ الميلاد *</label>
+
+          <input
+            type="date"
+            id="birth-date"
+            name="birth_date"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="driver-phone">رقم الهاتف الأساسي *</label>
+
+          <input
+            type="tel"
+            id="driver-phone"
+            name="phone"
+            placeholder="01xxxxxxxxx"
+            inputmode="tel"
+            autocomplete="tel"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="alternative-phone">رقم هاتف بديل</label>
+
+          <input
+            type="tel"
+            id="alternative-phone"
+            name="alternative_phone"
+            placeholder="01xxxxxxxxx"
+            inputmode="tel"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="driver-address">منطقة السكن *</label>
+
+          <input
+            type="text"
+            id="driver-address"
+            name="address"
+            placeholder="اسم القرية أو المنطقة"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="work-area">منطقة العمل المفضلة *</label>
+
+          <input
+            type="text"
+            id="work-area"
+            name="work_area"
+            placeholder="أين ترغب في استقبال الرحلات؟"
+            required
+          >
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم الثاني: الصورة الشخصية
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>الصورة الشخصية</legend>
+
+        <div class="form-group">
+
+          <label for="personal-photo">
+            صورة شخصية واضحة *
+          </label>
+
+          <input
+            type="file"
+            id="personal-photo"
+            name="personal_photo"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+
+          <small>
+            استخدم صورة واضحة تظهر وجهك.
+          </small>
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم الثالث: بيانات الهوية
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>بيانات إثبات الهوية</legend>
+
+        <div class="form-group">
+
+          <label for="national-id-number">
+            الرقم القومي
+          </label>
+
+          <input
+            type="text"
+            id="national-id-number"
+            name="national_id_number"
+            inputmode="numeric"
+            maxlength="14"
+            placeholder="14 رقمًا"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="id-front">
+            صورة البطاقة - الوجه الأمامي *
+          </label>
+
+          <input
+            type="file"
+            id="id-front"
+            name="id_front"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="id-back">
+            صورة البطاقة - الوجه الخلفي *
+          </label>
+
+          <input
+            type="file"
+            id="id-back"
+            name="id_back"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم الرابع: ملكية المركبة
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>ملكية المركبة</legend>
+
+        <p class="field-description">
+          حدد علاقتك بالمركبة التي ستعمل عليها.
+        </p>
+
+        <div class="radio-option">
+
+          <input
+            type="radio"
+            id="vehicle-owner"
+            name="ownership_type"
+            value="owner"
+            required
+          >
+
+          <label for="vehicle-owner">
+            أنا مالك المركبة
+          </label>
+
+        </div>
+
+
+        <div class="radio-option">
+
+          <input
+            type="radio"
+            id="vehicle-authorized"
+            name="ownership_type"
+            value="authorized"
+            required
+          >
+
+          <label for="vehicle-authorized">
+            أنا مفوض بالعمل على المركبة
+          </label>
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم الخامس: نوع المركبة
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>نوع المركبة</legend>
+
+        <div class="form-group">
+
+          <label for="vehicle-type">اختر نوع المركبة *</label>
+
+          <select
+            id="vehicle-type"
+            name="vehicle_type"
+            required
+          >
+
+            <option value="">اختر نوع المركبة</option>
+
+            <option value="tuktuk">🛺 توكتوك</option>
+
+            <option value="taxi">🚕 تاكسي</option>
+
+            <option value="car">🚗 سيارة</option>
+
+          </select>
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-brand">الشركة المصنعة *</label>
+
+          <input
+            type="text"
+            id="vehicle-brand"
+            name="vehicle_brand"
+            placeholder="مثال: باجاج"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-model">الموديل *</label>
+
+          <input
+            type="text"
+            id="vehicle-model"
+            name="vehicle_model"
+            placeholder="اكتب موديل المركبة"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-year">سنة الصنع *</label>
+
+          <input
+            type="number"
+            id="vehicle-year"
+            name="vehicle_year"
+            min="1980"
+            max="2026"
+            placeholder="مثال: 2023"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-color">لون المركبة *</label>
+
+          <input
+            type="text"
+            id="vehicle-color"
+            name="vehicle_color"
+            placeholder="مثال: أسود"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-plate">رقم اللوحة إن وجد</label>
+
+          <input
+            type="text"
+            id="vehicle-plate"
+            name="vehicle_plate"
+            placeholder="رقم اللوحة"
+          >
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم السادس: صور المركبة
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>صور المركبة</legend>
+
+        <p class="field-description">
+          ارفع صورًا واضحة للمركبة حتى يمكن مراجعتها.
+        </p>
+
+        <div class="form-group">
+
+          <label for="vehicle-front">
+            صورة المركبة من الأمام *
+          </label>
+
+          <input
+            type="file"
+            id="vehicle-front"
+            name="vehicle_front_photo"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-back">
+            صورة المركبة من الخلف *
+          </label>
+
+          <input
+            type="file"
+            id="vehicle-back"
+            name="vehicle_back_photo"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-side">
+            صورة المركبة من الجانب
+          </label>
+
+          <input
+            type="file"
+            id="vehicle-side"
+            name="vehicle_side_photo"
+            accept="image/jpeg,image/png,image/webp"
+          >
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم السابع: المستندات الإضافية
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>المستندات الإضافية</legend>
+
+        <div class="form-group">
+
+          <label for="driving-license-front">
+            صورة رخصة القيادة - الأمام
+          </label>
+
+          <input
+            type="file"
+            id="driving-license-front"
+            name="driving_license_front"
+            accept="image/jpeg,image/png,image/webp"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="driving-license-back">
+            صورة رخصة القيادة - الخلف
+          </label>
+
+          <input
+            type="file"
+            id="driving-license-back"
+            name="driving_license_back"
+            accept="image/jpeg,image/png,image/webp"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="vehicle-license">
+            صورة رخصة المركبة إن وجدت
+          </label>
+
+          <input
+            type="file"
+            id="vehicle-license"
+            name="vehicle_license"
+            accept="image/jpeg,image/png,image/webp"
+          >
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           القسم الثامن: الموافقات
+      ================================== -->
+
+      <fieldset class="form-section">
+
+        <legend>الإقرار والموافقة</legend>
+
+        <div class="checkbox-option">
+
+          <input
+            type="checkbox"
+            id="data-accuracy"
+            name="data_accuracy"
+            required
+          >
+
+          <label for="data-accuracy">
+            أقر بأن البيانات المقدمة صحيحة.
+          </label>
+
+        </div>
+
+
+        <div class="checkbox-option">
+
+          <input
+            type="checkbox"
+            id="ownership-confirmation"
+            name="ownership_confirmation"
+            required
+          >
+
+          <label for="ownership-confirmation">
+            أؤكد أنني مالك المركبة أو مفوض بالعمل عليها.
+          </label>
+
+        </div>
+
+
+        <div class="checkbox-option">
+
+          <input
+            type="checkbox"
+            id="privacy-consent"
+            name="privacy_consent"
+            required
+          >
+
+          <label for="privacy-consent">
+            أوافق على سياسة الخصوصية واستخدام بياناتي
+            لغرض مراجعة طلب التسجيل وفق السياسة المعلنة.
+          </label>
+
+        </div>
+
+      </fieldset>
+
+
+      <!-- =================================
+           أزرار التسجيل
+      ================================== -->
+
+      <div class="form-actions">
+
+        <button type="submit" id="submit-driver">
+          إرسال طلب التسجيل
+        </button>
+
+        <a href="#role-selection" class="secondary-button">
+          العودة
+        </a>
+
+      </div>
+
+
+      <p class="form-footer">
+        جميع الطلبات تخضع للمراجعة قبل تفعيل حساب السائق.
+      </p>
+
+    </form>
+
+  </section>
+
+
+  <!-- =================================
+       نهاية الصفحة
+  ================================== -->
+
+  <footer class="main-footer">
+
+    <p>سِكّة | مشوارك أسهل</p>
+
+    <small>SEKKA © 2026 - جميع الحقوق محفوظة</small>
+
+  </footer>
+
+
+  <!-- سيتم ربط التفاعلات والتحقق والإرسال لاحقًا بملف JavaScript -->
+
+</body>
+</html>
