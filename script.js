@@ -27,6 +27,7 @@ async signUp(d) {
     email: d.email,
     password: d.password,
     options: {
+      emailRedirectTo: 'https://sekkaofficial.github.io/sekka/',
       data: {
         display_name: d.name
       }
