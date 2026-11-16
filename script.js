@@ -458,17 +458,63 @@ document.addEventListener('change', e => {
 
 /* ===== البداية ===== */
 function boot() {
-
   let seen = false;
-  try { seen = sessionStorage.getItem('sekka_splash') === '1'; } catch (e) { /* التخزين غير متاح */ }
+
+  try {
+    seen = sessionStorage.getItem('sekka_splash') === '1';
+  } catch (e) {}
+
   const sp = $('#splash');
+
   go('home', true);
-  if (seen) { sp.hidden = true; return; }
-  setTimeout(() => {
-    sp.classList.add('out');
-    try { sessionStorage.setItem('sekka_splash', '1'); } catch (e) { /* تجاهل */ }
-    setTimeout(() => { sp.hidden = true; }, 700);
-  }, 2200);
+
+  if (seen) {
+    sp.hidden = true;
+  } else {
+    setTimeout(() => {
+      sp.classList.add('out');
+      try {
+        sessionStorage.setItem('sekka_splash', '1');
+      } catch (e) {}
+      setTimeout(() => {
+        sp.hidden = true;
+      }, 700);
+    }, 2200);
+  }
+
+  db.auth.onAuthStateChange((event, session) => {
+    if (session?.user) {
+      S.user = {
+        name: session.user.user_metadata?.display_name || session.user.email,
+        email: session.user.email
+      };
+      S.drv.account = 'نشط';
+
+      if (event === 'SIGNED_IN') {
+        go('home', true);
+      }
+    } else if (event === 'SIGNED_OUT') {
+      S.user = null;
+      S.drv.account = 'غير مسجّل الدخول';
+    }
+  });
+
+  db.auth.getSession().then(({ data, error }) => {
+    if (error) throw error;
+
+    const user = data.session?.user;
+
+    if (user) {
+      S.user = {
+        name: user.user_metadata?.display_name || user.email,
+        email: user.email
+      };
+      S.drv.account = 'نشط';
+      go('home', true);
+    }
+  }).catch(error => {
+    console.error('Session restore error:', error);
+  });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
