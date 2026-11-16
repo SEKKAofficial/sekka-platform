@@ -419,7 +419,13 @@ const acts = {
   legal(el) { const [t, ps] = LEGAL[el.dataset.v]; const s = $('#sheet'); s.innerHTML = `<div><h3>${t}</h3>${ps.map(p => `<p>${p}</p>`).join('')}<button class="btn" data-act="close">فهمت</button></div>`; s.hidden = false; },
   close() { $('#sheet').hidden = true; },
   logout() { S.user = null; S.drv.account = 'غير مسجّل الدخول'; stack.length = 0; go('home', true); toast('تم تسجيل الخروج'); },
-  resend() { send(async () => { await API.resendCode({}); toast('تم إرسال الرمز'); }); },
+  resend() {
+  send(async () => {
+    if (!S.reg.email) return fail('البريد الإلكتروني غير موجود، سجّل بياناتك مرة أخرى');
+    await API.resendCode({ email: S.reg.email });
+    toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني');
+  });
+},
   online() {
     if (driverGate()) return toast('لا يمكن تفعيل استقبال الرحلات قبل اعتماد حسابك ومركبتك', true);
     send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; render(); });
