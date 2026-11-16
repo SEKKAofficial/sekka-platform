@@ -21,26 +21,54 @@ const CONFIG = { riderEnabled: false };
 /* ===== طبقة الربط بالخادم =====
    كل دالة هنا تُستبدل لاحقًا باستدعاء Supabase. لا توجد مفاتيح سرّية في هذا الملف. */
 const API = {
-  _() { return Promise.reject(new Error('NOT_CONNECTED')); },
-async signUp(d) {
-  const { data, error } = await db.auth.signUp({
-    email: d.email,
-    password: d.password,
-    options: {
-      emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/',
-      data: {
-        display_name: d.name
-      }
-    }
-  });
+  _() {
+    return Promise.reject(new Error('NOT_CONNECTED'));
+  },
 
-  if (error) throw error;
-  return data;
-},
-  signIn(d) { return this._(d); },
-  resetPassword(d) { return this._(d); },
-  verifyEmail(d) { return this._(d); },
-  resendCode(d) { return this._(d); },
+  async signUp(d) {
+    const { data, error } = await db.auth.signUp({
+      email: d.email,
+      password: d.password,
+      options: {
+        emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/',
+        data: { display_name: d.name }
+      }
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async signIn(d) {
+    const { data, error } = await db.auth.signInWithPassword({
+      email: d.email,
+      password: d.password
+    });
+    if (error) throw error;
+    return data.user;
+  },
+
+  async resetPassword(d) {
+    const { error } = await db.auth.resetPasswordForEmail(d.email, {
+      redirectTo: 'https://sekkaofficial.github.io/sekka-platform/'
+    });
+    if (error) throw error;
+  },
+
+  async verifyEmail() {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    if (!data.session) throw new Error('لم يتم تأكيد البريد بعد');
+    return data.session.user;
+  },
+
+  async resendCode(d) {
+    const { error } = await db.auth.resend({
+      type: 'signup',
+      email: d.email
+    });
+    if (error) throw error;
+  },
+
   registerDriver(d) { return this._(d); },
   setDriverOnline(v) { return this._(v); },
   submitComplaint(d) { return this._(d); },
