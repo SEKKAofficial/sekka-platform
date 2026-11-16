@@ -2,52 +2,25 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>مهامي - نظّم يومك</title>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#064e3b">
+  <title>سِكّة | مشوارك أسهل</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <main class="container">
-
-    <header>
-      <h1>مهامي</h1>
-      <p>نظّم يومك وأنجز أهدافك</p>
-    </header>
-
-    <section id="auth-section">
-      <h2>حسابك الشخصي</h2>
-
-      <input id="email" type="email"
-        placeholder="البريد الإلكتروني">
-
-      <input id="password" type="password"
-        placeholder="كلمة المرور">
-
-      <button id="signup-btn">إنشاء حساب</button>
-      <button id="login-btn">تسجيل الدخول</button>
-
-      <p id="auth-message"></p>
-    </section>
-
-    <section id="tasks-section" hidden>
-      <h2>قائمة مهامي</h2>
-
-      <button id="logout-btn">تسجيل الخروج</button>
-
-      <div class="task-input">
-        <input id="task-title"
-          type="text"
-          placeholder="اكتب مهمة جديدة">
-
-        <button id="add-task-btn">إضافة</button>
-      </div>
-
-      <div id="tasks-list"></div>
-    </section>
-
-  
-  </main>
+  <!-- في CodePen: الصق ما بين <body> و </body> فقط (بدون وسوم script و link) -->
+  <div class="shell" id="shell">
+    <div id="splash" aria-label="سِكّة">
+      <img id="splashImg" alt="سِكّة SEKKA">
+      <p class="splash-tag">مشوارك أسهل</p>
+    </div>
+    <main id="view"></main>
+    <nav id="tabs" class="tabs" hidden aria-label="التنقل الرئيسي"></nav>
+    <div id="sheet" class="sheet" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="loader" class="loader" hidden><span></span></div>
+  </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
 </body>
 </html>
