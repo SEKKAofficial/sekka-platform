@@ -22,7 +22,20 @@ const CONFIG = { riderEnabled: false };
    كل دالة هنا تُستبدل لاحقًا باستدعاء Supabase. لا توجد مفاتيح سرّية في هذا الملف. */
 const API = {
   _() { return Promise.reject(new Error('NOT_CONNECTED')); },
-  signUp(d) { return this._(d); },
+async signUp(d) {
+  const { data, error } = await db.auth.signUp({
+    email: d.email,
+    password: d.password,
+    options: {
+      data: {
+        display_name: d.name
+      }
+    }
+  });
+
+  if (error) throw error;
+  return data;
+},
   signIn(d) { return this._(d); },
   resetPassword(d) { return this._(d); },
   verifyEmail(d) { return this._(d); },
