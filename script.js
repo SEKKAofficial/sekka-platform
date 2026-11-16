@@ -400,7 +400,7 @@ document.addEventListener('change', e => {
 
 /* ===== البداية ===== */
 function boot() {
-  $('#splashImg').src = LOGO.splash;
+
   let seen = false;
   try { seen = sessionStorage.getItem('sekka_splash') === '1'; } catch (e) { /* التخزين غير متاح */ }
   const sp = $('#splash');
