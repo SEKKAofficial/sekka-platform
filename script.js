@@ -172,11 +172,14 @@ const routes = {
     <form data-form="forgot" novalidate>${fld('البريد الإلكتروني', 'email', 'email', 'required dir="ltr"')}<button class="btn" type="submit">إرسال الرابط</button></form></div>
     ${btn('العودة لتسجيل الدخول', 'login', 'sec')}`,
 
-  verify: () => `${hdr('التحقق من البريد الإلكتروني')}
-    <div class="card"><p>أدخل رمز التحقق المكوّن من 6 أرقام المرسل إلى بريدك الإلكتروني.</p>
-    <form data-form="verify" novalidate><label class="f"><span>رمز التحقق</span><input name="code" inputmode="numeric" maxlength="6" dir="ltr" required placeholder="------"></label>
-    <button class="btn" type="submit">تأكيد</button></form>
-    <button class="btn lite" data-act="resend">إعادة إرسال الرمز</button></div>`,
+verify: () => `${hdr('تأكيد البريد الإلكتروني')}
+<div class="card">
+  <p>تم إرسال رابط تأكيد إلى بريدك الإلكتروني.</p>
+  <p>افتح بريدك واضغط على رابط التأكيد لتفعيل حسابك في سِكّة.</p>
+  <p>لو الرسالة مش موجودة، راجع مجلد الرسائل غير المرغوب فيها.</p>
+  <button class="btn lite" data-act="resend">إعادة إرسال رابط التأكيد</button>
+  <button class="btn sec" data-go="login">العودة لتسجيل الدخول</button>
+</div>`,
 
   profile: () => `${hdr('الملف الشخصي')}
     ${S.user ? `<div class="avatar">${ic('user')}</div>
