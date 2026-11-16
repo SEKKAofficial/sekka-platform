@@ -345,7 +345,14 @@ const forms = {
     if (d.pw.length < 8) return fail('كلمة المرور يجب ألا تقل عن 8 أحرف', f.pw);
     if (d.pw !== d.pw2) return fail('كلمتا المرور غير متطابقتين', f.pw2);
     if (!f.terms.checked) return fail('يجب الموافقة على الشروط وسياسة الخصوصية');
-    send(async () => { await API.signUp({ name: d.name, email: d.email, password: d.pw }); S.user = { name: d.name, email: d.email }; go('verify'); });
+    send(async () => {
+  await API.signUp({ name: d.name, email: d.email, password: d.pw });
+  S.reg.name = d.name.trim();
+  S.reg.email = d.email.trim();
+  S.user = null;
+  go('verify');
+  toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني');
+});
   },
   login(f) {
     const d = fd(f);
