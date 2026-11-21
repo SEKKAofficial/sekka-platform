@@ -1,9 +1,11 @@
-const CACHE_NAME = "sekka-pwa-v1";
+const CACHE_NAME = "sekka-pwa-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./script.js",
+  "./pwa-install.css",
+  "./pwa-install.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
