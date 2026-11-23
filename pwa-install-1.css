@@ -1,0 +1,196 @@
+/* SEKKA PWA install prompt
+   Scoped to #sekka-install-* / .sekka-* only. No global, body or * selectors.
+   Animations use transform/opacity only, so the app stays fast. */
+
+#sekka-install-overlay {
+  --sk-dark: #064e3b;
+  --sk-green: #10b981;
+  --sk-soft: #e8f5ee;
+  --sk-ink: #0f2a22;
+  --sk-muted: #5f7a70;
+
+  position: fixed; inset: 0; z-index: 99990;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(4, 30, 22, .62);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  overscroll-behavior: contain;
+  opacity: 0; pointer-events: none;
+  transition: opacity .22s ease;
+  box-sizing: border-box;
+}
+#sekka-install-overlay[hidden] { display: none; }
+#sekka-install-overlay.is-open { opacity: 1; pointer-events: auto; }
+#sekka-install-overlay *, #sekka-install-overlay *::before, #sekka-install-overlay *::after { box-sizing: border-box; }
+
+/* ---------- Card ---------- */
+#sekka-install-card {
+  width: min(100%, 392px); max-height: 100%; overflow: auto;
+  background: #fff; color: var(--sk-ink);
+  border-radius: 28px; text-align: center;
+  font-family: 'Cairo', 'Segoe UI', Tahoma, system-ui, sans-serif;
+  box-shadow: 0 2px 4px rgba(4, 30, 22, .08), 0 24px 70px rgba(4, 30, 22, .42);
+  transform: translateY(18px) scale(.96); opacity: 0;
+  transition: transform .38s cubic-bezier(.2, .9, .25, 1.12), opacity .26s ease;
+}
+#sekka-install-overlay.is-open #sekka-install-card { transform: none; opacity: 1; }
+
+/* ---------- Hero ---------- */
+#sekka-install-hero {
+  position: relative; overflow: hidden; height: 148px;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(16, 185, 129, .55) 0%, rgba(16, 185, 129, 0) 60%),
+    linear-gradient(160deg, #0a6b50 0%, var(--sk-dark) 100%);
+  border-radius: 28px 28px 0 0;
+}
+.sekka-ring {
+  position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px;
+  border-radius: 50%; border: 2px solid rgba(255, 255, 255, .28);
+  animation: sekkaRing 3.2s ease-out infinite;
+}
+.sekka-ring-b { animation-delay: 1.6s; }
+@keyframes sekkaRing { from { transform: scale(.8); opacity: .7; } to { transform: scale(2.1); opacity: 0; } }
+
+#sekka-install-road {
+  position: absolute; left: 0; right: 0; bottom: 14px; height: 3px; overflow: hidden; opacity: .5;
+}
+#sekka-install-road::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -40px; width: calc(100% + 80px);
+  background: repeating-linear-gradient(90deg, #fff 0 18px, transparent 18px 40px);
+  animation: sekkaRoad 1.4s linear infinite;
+}
+@keyframes sekkaRoad { to { transform: translateX(40px); } }
+
+#sekka-install-logo-wrap {
+  position: relative; z-index: 1; width: 84px; height: 84px; border-radius: 24px;
+  background: #fff; padding: 4px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .28);
+  animation: sekkaFloat 3.4s ease-in-out infinite;
+}
+@keyframes sekkaFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+#sekka-install-logo {
+  width: 100%; height: 100%; object-fit: contain; border-radius: 20px; display: block;
+}
+#sekka-install-fallback {
+  display: none; width: 100%; height: 100%; border-radius: 20px;
+  align-items: center; justify-content: center;
+  background: linear-gradient(160deg, var(--sk-green), var(--sk-dark));
+  color: #fff; font-weight: 800; font-size: 1.3rem;
+}
+#sekka-install-logo-wrap.is-fallback #sekka-install-logo { display: none; }
+#sekka-install-logo-wrap.is-fallback #sekka-install-fallback { display: flex; }
+
+/* Success mark (drawn only in the success view) */
+#sekka-install-check {
+  position: absolute; bottom: -10px; left: -10px; width: 40px; height: 40px;
+  border-radius: 50%; background: #fff; padding: 2px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+  transform: scale(0); opacity: 0;
+}
+#sekka-install-check svg { display: block; width: 100%; height: 100%; }
+.sekka-check-circle { fill: var(--sk-green); stroke: var(--sk-green); stroke-width: 2; }
+.sekka-check-mark {
+  fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 40; stroke-dashoffset: 40;
+}
+#sekka-install-card[data-view="success"] #sekka-install-check {
+  animation: sekkaPop .5s cubic-bezier(.2, 1.4, .4, 1) .12s forwards;
+}
+#sekka-install-card[data-view="success"] .sekka-check-mark {
+  animation: sekkaDraw .4s ease-out .5s forwards;
+}
+@keyframes sekkaPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes sekkaDraw { to { stroke-dashoffset: 0; } }
+
+/* ---------- Body ---------- */
+#sekka-install-body {
+  padding: 22px 22px 20px;
+  transition: opacity .15s ease, transform .15s ease;
+}
+#sekka-install-body.is-swapping { opacity: 0; transform: translateY(6px); }
+
+#sekka-install-card h2 {
+  color: var(--sk-dark); font-size: 1.3rem; line-height: 1.5; margin: 0 0 8px; font-weight: 800;
+}
+#sekka-install-card p {
+  color: var(--sk-muted); font-size: .94rem; line-height: 1.85; margin: 0 0 16px;
+}
+#sekka-install-actions { display: grid; gap: 10px; }
+
+.sekka-install-btn {
+  width: 100%; min-height: 48px; border: 0; border-radius: 14px; padding: 12px 16px;
+  font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: transform .15s ease, box-shadow .2s ease, background-color .2s ease, opacity .2s ease;
+}
+.sekka-install-btn[hidden] { display: none; }
+#sekka-install-now {
+  color: #fff;
+  background: linear-gradient(135deg, var(--sk-green) 0%, #059669 45%, var(--sk-dark) 100%);
+  box-shadow: 0 8px 20px rgba(6, 78, 59, .32);
+}
+#sekka-install-later { color: var(--sk-dark); background: var(--sk-soft); }
+
+.sekka-install-btn:focus-visible { outline: 3px solid var(--sk-green); outline-offset: 2px; }
+.sekka-install-btn:active:not(:disabled) { transform: scale(.97); }
+.sekka-install-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  #sekka-install-now:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(6, 78, 59, .4); }
+  #sekka-install-later:hover:not(:disabled) { background: #d6eee1; }
+}
+
+#sekka-install-status {
+  color: var(--sk-dark) !important; font-weight: 700; min-height: 1.5em; margin: 12px 0 0 !important; font-size: .9rem !important;
+}
+#sekka-install-status:empty { min-height: 0; margin: 0 !important; }
+#sekka-install-help {
+  margin: 0 0 14px !important; font-size: .85rem !important; line-height: 1.8 !important;
+  background: #f3f7f5; border-radius: 12px; padding: 10px 12px;
+}
+#sekka-install-help[hidden], #sekka-install-help:empty { display: none; }
+
+/* Guidance view: no install button, so give the text room */
+#sekka-install-card[data-view="guide"] #sekka-install-body,
+#sekka-install-card[data-view="success"] #sekka-install-body { display: flex; flex-direction: column; }
+#sekka-install-card[data-view="guide"] #sekka-install-desc { margin-bottom: 10px; }
+#sekka-install-card[data-view="guide"] #sekka-install-help,
+#sekka-install-card[data-view="success"] #sekka-install-help { order: 1; }
+#sekka-install-card[data-view="guide"] #sekka-install-status,
+#sekka-install-card[data-view="success"] #sekka-install-status { order: 2; }
+#sekka-install-card[data-view="guide"] #sekka-install-actions,
+#sekka-install-card[data-view="success"] #sekka-install-actions { order: 3; }
+#sekka-install-card[data-view="success"] #sekka-install-hero {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(52, 211, 153, .65) 0%, rgba(16, 185, 129, 0) 60%),
+    linear-gradient(160deg, #059669 0%, var(--sk-dark) 100%);
+}
+
+/* ---------- Small / tall / wide screens ---------- */
+@media (max-width: 360px) {
+  #sekka-install-hero { height: 126px; }
+  #sekka-install-body { padding: 18px 16px 16px; }
+  #sekka-install-card h2 { font-size: 1.15rem; }
+}
+@media (max-height: 480px) {
+  #sekka-install-hero { height: 96px; }
+  #sekka-install-logo-wrap { width: 64px; height: 64px; border-radius: 18px; }
+  #sekka-install-logo, #sekka-install-fallback { border-radius: 15px; }
+}
+@media (min-width: 768px) {
+  #sekka-install-card { width: min(100%, 440px); }
+  #sekka-install-hero { height: 164px; }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #sekka-install-overlay, #sekka-install-card, #sekka-install-body, .sekka-install-btn { transition: none !important; }
+  #sekka-install-card { transform: none; }
+  #sekka-install-logo-wrap, .sekka-ring, #sekka-install-road::before { animation: none !important; }
+  .sekka-ring { opacity: .25; transform: scale(1.4); }
+  #sekka-install-card[data-view="success"] #sekka-install-check { animation: none !important; transform: scale(1); opacity: 1; }
+  #sekka-install-card[data-view="success"] .sekka-check-mark { animation: none !important; stroke-dashoffset: 0; }
+}
