@@ -2,10 +2,9 @@ const SUPABASE_URL = "https://aawuvkpmcoahhsczryid.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zFI5QubbX7IWzHLwzrzitA_KQT88nSL";
 
-const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
+const db = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
+  : null;
 /* سِكّة | SEKKA — app.js (Frontend فقط، جاهز للربط لاحقًا بـ Supabase) */
 (function () {
 'use strict';
@@ -20,57 +19,67 @@ const CONFIG = { riderEnabled: false };
 
 /* ===== طبقة الربط بالخادم =====
    كل دالة هنا تُستبدل لاحقًا باستدعاء Supabase. لا توجد مفاتيح سرّية في هذا الملف. */
+const need = () => { if (!db) throw new Error('NOT_CONNECTED'); };
+const mapUser = u => ({ name: (u.user_metadata && u.user_metadata.display_name) || u.email, email: u.email });
+const ST = { pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض' };
+let drvLoaded = false;
+function errMsg(e) {
+  const m = String((e && (e.message || e.code)) || '').toLowerCase();
+  if (m === 'not_connected') return 'تعذّر الاتصال بالخادم حاليًا، لم يتم حفظ بياناتك. حاول مرة أخرى لاحقًا.';
+  if (m.includes('invalid login')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+  if (m.includes('not confirmed')) return 'أكّد بريدك الإلكتروني من الرابط اللي وصلك أولًا';
+  if (m.includes('already registered')) return 'البريد ده مسجّل قبل كده، جرّب تسجيل الدخول';
+  if (m.includes('rate limit') || m.includes('too many') || (e && e.status === 429)) return 'محاولات كتير، استنى شوية وجرّب تاني';
+  if (m.includes('session missing')) return 'انتهت صلاحية الرابط، اطلب رابطًا جديدًا';
+  if (m.includes('different from the old')) return 'اختر كلمة مرور مختلفة عن القديمة';
+  if (m === 'auth') return 'سجّل الدخول أولًا';
+  if (m === 'big') return 'حجم الملف كبير (الحد 5 ميجا)';
+  if (m === 'type' || m === 'img') return 'نوع الملف غير مدعوم، ارفع صورة أو PDF';
+  if (m.includes('failed to fetch') || m.includes('network')) return 'تعذّر الاتصال بالإنترنت';
+  if (m.includes('row-level security') || m.includes('locked') || m.includes('permission')) return 'غير مسموح بهذا الإجراء حاليًا';
+  return 'حدث خطأ غير متوقع، حاول مرة أخرى.';
+}
+function prep(file) {
+  return new Promise((res, rej) => {
+    if (file.type === 'application/pdf') return file.size > 5242880 ? rej(new Error('BIG')) : res(file);
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return rej(new Error('TYPE'));
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('IMG')), 'image/jpeg', 0.82);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('IMG')); };
+    im.src = url;
+  });
+}
 const API = {
-  _() {
-    return Promise.reject(new Error('NOT_CONNECTED'));
-  },
-
+  _() { return Promise.reject(new Error('NOT_CONNECTED')); },
+  async uid() { need(); const { data } = await db.auth.getUser(); if (!data || !data.user) throw new Error('AUTH'); return data.user.id; },
   async signUp(d) {
-    const { data, error } = await db.auth.signUp({
-      email: d.email,
-      password: d.password,
-      options: {
-        emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/',
-        data: { display_name: d.name }
-      }
-    });
-    if (error) throw error;
-    return data;
+    need();
+    const { data, error } = await db.auth.signUp({ email: d.email, password: d.password, options: { emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/', data: { display_name: d.name } } });
+    if (error) throw error; return data;
   },
-
-  async signIn(d) {
-    const { data, error } = await db.auth.signInWithPassword({
-      email: d.email,
-      password: d.password
-    });
-    if (error) throw error;
-    return data.user;
-  },
-
-  async resetPassword(d) {
-    const { error } = await db.auth.resetPasswordForEmail(d.email, {
-      redirectTo: 'https://sekkaofficial.github.io/sekka-platform/'
-    });
+  async signIn(d) { need(); const { data, error } = await db.auth.signInWithPassword({ email: d.email, password: d.password }); if (error) throw error; return data.user; },
+  async signOut() { if (db) await db.auth.signOut({ scope: 'local' }); },
+  async resetPassword(d) { need(); const { error } = await db.auth.resetPasswordForEmail(d.email, { redirectTo: 'https://sekkaofficial.github.io/sekka-platform/' }); if (error) throw error; },
+  async updatePassword(pw) { need(); const { error } = await db.auth.updateUser({ password: pw }); if (error) throw error; },
+  async resendCode(d) { need(); const { error } = await db.auth.resend({ type: 'signup', email: d.email }); if (error) throw error; },
+  async registerDriver(d, f) {
+    const uid = await this.uid();
+    const up = async (file, tag) => {
+      const b = await prep(file), p = `${uid}/${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${b.type === 'application/pdf' ? 'pdf' : 'jpg'}`;
+      const { error } = await db.storage.from('driver-docs').upload(p, b, { contentType: b.type }); if (error) throw error; return p;
+    };
+    const photo_path = f.photo ? await up(f.photo, 'photo') : null, doc_paths = [];
+    for (const x of f.docs) doc_paths.push({ label: x.label, path: await up(x.file, 'doc') });
+    const { error } = await db.from('driver_profiles').upsert({ user_id: uid, full_name: d.name.trim(), dob: d.dob, phone: d.phone.replace(/\s/g, ''), phone2: d.phone2 ? d.phone2.replace(/\s/g, '') : null, area: d.area, place: d.place || null, vehicle_type: d.vtype, brand: d.brand.trim(), model: d.model.trim(), year: +d.year, color: d.color.trim(), plate: d.plate ? d.plate.trim() : null, relation: d.rel, photo_path, doc_paths }, { onConflict: 'user_id' });
     if (error) throw error;
   },
-
-  async verifyEmail() {
-    const { data, error } = await db.auth.getSession();
-    if (error) throw error;
-    if (!data.session) throw new Error('لم يتم تأكيد البريد بعد');
-    return data.session.user;
-  },
-
-  async resendCode(d) {
-    const { error } = await db.auth.resend({
-      type: 'signup',
-      email: d.email
-    });
-    if (error) throw error;
-  },
-
-  registerDriver(d) { return this._(d); },
-  setDriverOnline(v) { return this._(v); },
+  async myDriver() { const uid = await this.uid(); const { data, error } = await db.from('driver_profiles').select('*').eq('user_id', uid).maybeSingle(); if (error) throw error; return data; },
+  async setDriverOnline(v) { const uid = await this.uid(); const { error } = await db.from('driver_profiles').update({ is_online: !!v }).eq('user_id', uid); if (error) throw error; },
   submitComplaint(d) { return this._(d); },
   saveAddress(d) { return this._(d); },
   requestRide(d) { return this._(d); },
@@ -171,6 +180,8 @@ const routes = {
     <div class="card"><p>اكتب بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.</p>
     <form data-form="forgot" novalidate>${fld('البريد الإلكتروني', 'email', 'email', 'required dir="ltr"')}<button class="btn" type="submit">إرسال الرابط</button></form></div>
     ${btn('العودة لتسجيل الدخول', 'login', 'sec')}`,
+
+  newpw: () => `${hdr('كلمة مرور جديدة', false)}<div class="card"><form data-form="newpw" novalidate>${fld('كلمة المرور الجديدة (8 أحرف على الأقل)', 'pw', 'password', 'required autocomplete="new-password"')}${fld('تأكيد كلمة المرور', 'pw2', 'password', 'required autocomplete="new-password"')}<button class="btn" type="submit">حفظ كلمة المرور</button></form></div>`,
 
 verify: () => `${hdr('تأكيد البريد الإلكتروني')}
 <div class="card">
@@ -297,22 +308,15 @@ const stack = []; let cur = 'home';
 
 function riderOpen() { return CONFIG.riderEnabled === true; }
 function go(name, replace) {
+  if (/^d-reg[123]$/.test(name) && !S.user) { toast('سجّل الدخول أو أنشئ حسابًا أولًا', true); name = 'login'; }
   if (name.startsWith('r-') && !riderOpen()) name = 'r-gate';
   if (!routes[name]) name = 'home';
-  if (!replace && cur !== name) stack.push(cur);
+  if (!replace && cur !== name) { stack.push(cur); try { history.pushState(null, ''); } catch (e) {} }
   cur = name; render();
 }
-function back() { cur = stack.pop() || 'home'; if (cur.startsWith('r-') && !riderOpen()) cur = 'home'; render(); }
-function render() {
-  const v = $('#view');
-  v.innerHTML = routes[cur]();
-  v.style.animation = 'none'; void v.offsetWidth; v.style.animation = '';
-  window.scrollTo(0, 0);
-  const g = cur.startsWith('d-') && TABROUTES.d.includes(cur) ? 'd' : (TABROUTES.r.includes(cur) && riderOpen() ? 'r' : null);
-  const t = $('#tabs');
-  t.hidden = !g;
-  t.innerHTML = g ? TABS[g].map(([r, i, l]) => `<button data-go="${r}" class="${(cur === r || (r === 'r-home' && cur === 'r-start')) ? 'on' : ''}">${ic(i)}${l}</button>`).join('') : '';
-}
+function back() { if (stack.length) { try { history.back(); return; } catch (e) {} } popTo(); }
+function popTo() { cur = stack.pop() || 'home'; if (cur.startsWith('r-') && !riderOpen()) cur = 'home'; render(); }
+window.addEventListener('popstate', popTo);
 
 /* ===== رسائل وتحميل ===== */
 let tt;
@@ -324,7 +328,7 @@ async function send(fn) {
   $('#loader').hidden = false;
   try { return await fn(); }
   catch (e) {
-    toast(e && e.message === 'NOT_CONNECTED' ? 'تعذّر الاتصال بالخادم حاليًا، لم يتم حفظ بياناتك. حاول مرة أخرى لاحقًا.' : 'حدث خطأ غير متوقع، حاول مرة أخرى.', true);
+    console.error(e); toast(errMsg(e), true);
   } finally { $('#loader').hidden = true; }
 }
 function fail(msg, el) {
@@ -346,34 +350,34 @@ const forms = {
     if (d.pw !== d.pw2) return fail('كلمتا المرور غير متطابقتين', f.pw2);
     if (!f.terms.checked) return fail('يجب الموافقة على الشروط وسياسة الخصوصية');
     send(async () => {
-  await API.signUp({ name: d.name, email: d.email, password: d.pw });
+  const r = await API.signUp({ name: d.name, email: d.email, password: d.pw });
   S.reg.name = d.name.trim();
   S.reg.email = d.email.trim();
-  S.user = null;
-  go('verify');
-  toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني');
+  if (r && r.session) { go('home', true); toast('أهلًا بك في سِكّة'); } else { S.user = null; go('verify'); toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني'); }
 });
   },
   login(f) {
     const d = fd(f);
     if (!emailOk(d.email)) return fail('البريد الإلكتروني غير صحيح', f.email);
     if (!d.pw) return fail('اكتب كلمة المرور', f.pw);
-    send(async () => { const u = await API.signIn({ email: d.email, password: d.pw }); S.user = u; S.drv.account = 'نشط'; go('home', true); toast('أهلًا بك في سِكّة'); });
+    send(async () => { const u = await API.signIn({ email: d.email, password: d.pw }); S.user = mapUser(u); S.drv.account = 'نشط'; drvLoaded = false; go('home', true); afterAuth(); toast('أهلًا بك في سِكّة'); });
   },
   forgot(f) {
     const d = fd(f);
     if (!emailOk(d.email)) return fail('البريد الإلكتروني غير صحيح', f.email);
     send(async () => { await API.resetPassword({ email: d.email }); toast('تم إرسال رابط الاستعادة إلى بريدك'); go('login'); });
   },
-  verify(f) {
+  newpw(f) {
     const d = fd(f);
-    if (!/^\d{6}$/.test(d.code)) return fail('اكتب رمزًا من 6 أرقام', f.code);
-    send(async () => { await API.verifyEmail({ code: d.code }); S.drv.account = 'نشط'; toast('تم تأكيد بريدك الإلكتروني'); go('home', true); });
+    if (d.pw.length < 8) return fail('كلمة المرور يجب ألا تقل عن 8 أحرف', f.pw);
+    if (d.pw !== d.pw2) return fail('كلمتا المرور غير متطابقتين', f.pw2);
+    send(async () => { await API.updatePassword(d.pw); toast('تم تغيير كلمة المرور'); go('home', true); });
   },
   reg1(f) {
     const d = fd(f);
     if (d.name.trim().length < 3) return fail('اكتب اسمك الكامل', f.name);
     if (!d.dob) return fail('حدّد تاريخ الميلاد', f.dob);
+    { const a = new Date(d.dob), t = new Date(); let age = t.getFullYear() - a.getFullYear(); if (t < new Date(t.getFullYear(), a.getMonth(), a.getDate())) age--; if (isNaN(age) || age < 18 || age > 80) return fail('لازم يكون عمرك 18 سنة على الأقل', f.dob); }
     if (!phoneOk(d.phone)) return fail('رقم الهاتف غير صحيح (يبدأ بـ 01 ويتكون من 11 رقمًا)', f.phone);
     if (d.phone2 && !phoneOk(d.phone2)) return fail('الرقم البديل غير صحيح', f.phone2);
     if (!d.area) return fail('اختر المنطقة', f.area);
@@ -385,13 +389,15 @@ const forms = {
     if (!d.brand.trim() || !d.model.trim() || !d.color.trim()) return fail('أكمل بيانات المركبة');
     const y = +d.year; if (!(y >= 1980 && y <= 2030)) return fail('سنة الصنع غير صحيحة', f.year);
     if (!d.rel) return fail('حدّد علاقتك بالمركبة (مالك أو مفوَّض)');
+    if (d.vtype === 'taxi' && !d.plate.trim()) return fail('رقم اللوحة مطلوب للتاكسي', f.plate);
     Object.assign(S.reg, d); go('d-reg3');
   },
   reg3(f) {
     const ins = [...f.querySelectorAll('input[type=file]')];
     const miss = ins.find(i => !i.files.length);
     if (miss) return fail('ارفع جميع المستندات المطلوبة');
-    send(async () => { await API.registerDriver(S.reg); S.reg.submitted = true; S.drv.approval = 'قيد المراجعة'; S.drv.vehicle = 'قيد المراجعة'; toast('تم إرسال طلبك للمراجعة'); go('d-home', true); });
+    const docs = ins.map(i => ({ label: i.closest('.f').querySelector('span').textContent, file: i.files[0] }));
+    send(async () => { await API.registerDriver(S.reg, { photo: S.photoFile, docs }); S.reg.submitted = true; S.drv.approval = 'قيد المراجعة'; S.drv.vehicle = 'قيد المراجعة'; S.drv.approved = false; S.drv.vehApproved = false; toast('تم إرسال طلبك للمراجعة'); go('d-home', true); });
   },
   rpick(f) { const d = fd(f); if (d.pick.trim().length < 2) return fail('اكتب موقع الانطلاق', f.pick); S.ride.pick = d.pick; back(); },
   rdest(f) { const d = fd(f); if (d.dest.trim().length < 2) return fail('اكتب الوجهة', f.dest); S.ride.dest = d.dest; back(); },
@@ -418,7 +424,7 @@ const LEGAL = {
 const acts = {
   legal(el) { const [t, ps] = LEGAL[el.dataset.v]; const s = $('#sheet'); s.innerHTML = `<div><h3>${t}</h3>${ps.map(p => `<p>${p}</p>`).join('')}<button class="btn" data-act="close">فهمت</button></div>`; s.hidden = false; },
   close() { $('#sheet').hidden = true; },
-  logout() { S.user = null; S.drv.account = 'غير مسجّل الدخول'; stack.length = 0; go('home', true); toast('تم تسجيل الخروج'); },
+  logout() { send(async () => { await API.signOut(); resetSession(); toast('تم تسجيل الخروج'); }); },
   resend() {
   send(async () => {
     if (!S.reg.email) return fail('البريد الإلكتروني غير موجود، سجّل بياناتك مرة أخرى');
@@ -451,70 +457,62 @@ document.addEventListener('change', e => {
   if (i.type !== 'file' || !i.files[0]) return;
   const lb = i.closest('.up');
   if (i.name === 'photo') {
+    S.photoFile = i.files[0];
     S.reg.photo = URL.createObjectURL(i.files[0]);
     $('#avatar').innerHTML = `<img src="${S.reg.photo}" alt="">`;
   } else if (lb) { lb.classList.add('has'); lb.querySelector('span').textContent = i.files[0].name; }
 });
 
 /* ===== البداية ===== */
-function boot() {
-  let seen = false;
-
+const RECOVERY = /type=recovery/.test(location.hash);
+function resetSession() {
+  S.user = null; S.reg = {}; S.photoFile = null; drvLoaded = false;
+  S.drv = { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false };
+  stack.length = 0; go('home', true);
+}
+async function loadDriver() {
   try {
-    seen = sessionStorage.getItem('sekka_splash') === '1';
-  } catch (e) {}
-
+    const p = await API.myDriver(); if (!p) return;
+    S.reg.submitted = p.approval_status !== 'rejected'; S.reg.vtype = p.vehicle_type; S.reg.rel = p.relation;
+    S.drv.approval = ST[p.approval_status] || p.approval_status; S.drv.vehicle = ST[p.vehicle_status] || p.vehicle_status;
+    S.drv.approved = p.approval_status === 'approved'; S.drv.vehApproved = p.vehicle_status === 'approved';
+    S.drv.online = !!p.is_online && S.drv.approved && S.drv.vehApproved;
+    if (cur.startsWith('d-')) render();
+  } catch (e) { console.error('loadDriver', e); }
+}
+function afterAuth() { if (drvLoaded) return; drvLoaded = true; setTimeout(loadDriver, 0); }
+function boot() {
+  try { const si = $('#splashImg'); if (si) si.src = LOGO.splash; } catch (e) {}
+  let seen = false;
+  try { seen = sessionStorage.getItem('sekka_splash') === '1'; } catch (e) {}
   const sp = $('#splash');
-
   go('home', true);
-
-  if (seen) {
-    sp.hidden = true;
-  } else {
+  try { history.replaceState(null, ''); } catch (e) {}
+  if (seen) { sp.hidden = true; } else {
     setTimeout(() => {
       sp.classList.add('out');
-      try {
-        sessionStorage.setItem('sekka_splash', '1');
-      } catch (e) {}
-      setTimeout(() => {
-        sp.hidden = true;
-      }, 700);
+      try { sessionStorage.setItem('sekka_splash', '1'); } catch (e) {}
+      setTimeout(() => { sp.hidden = true; }, 700);
     }, 2200);
   }
-
+  if (RECOVERY) go('newpw', true);
+  if (!db) { toast('تعذّر تحميل خدمة الحساب، تأكد من الاتصال بالإنترنت', true); return; }
   db.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
-      S.user = {
-        name: session.user.user_metadata?.display_name || session.user.email,
-        email: session.user.email
-      };
-      S.drv.account = 'نشط';
-
-      if (event === 'SIGNED_IN') {
-        go('home', true);
-      }
-    } else if (event === 'SIGNED_OUT') {
-      S.user = null;
-      S.drv.account = 'غير مسجّل الدخول';
-    }
+    if (event === 'PASSWORD_RECOVERY') { go('newpw', true); return; }
+    if (session && session.user) {
+      S.user = mapUser(session.user); S.drv.account = 'نشط';
+      if (event === 'SIGNED_IN' && ['login', 'signup', 'verify', 'forgot'].includes(cur)) go('home', true);
+      afterAuth();
+    } else if (event === 'SIGNED_OUT' && S.user) { resetSession(); }
   });
-
   db.auth.getSession().then(({ data, error }) => {
     if (error) throw error;
-
-    const user = data.session?.user;
-
-    if (user) {
-      S.user = {
-        name: user.user_metadata?.display_name || user.email,
-        email: user.email
-      };
-      S.drv.account = 'نشط';
-      go('home', true);
-    }
-  }).catch(error => {
-    console.error('Session restore error:', error);
-  });
+    const u = data.session && data.session.user;
+    if (u) { S.user = mapUser(u); S.drv.account = 'نشط'; afterAuth(); render(); }
+  }).catch(e => console.error('Session restore error:', e));
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(e => console.error('SEKKA PWA registration failed:', e)); });
+}
 })();
