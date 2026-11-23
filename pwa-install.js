@@ -12,7 +12,7 @@
   const INSTALLED_KEY = "sekka_pwa_installed";             // permanent, never removed by this script
   const DISMISS_KEY = "sekka_install_dismissed_at";        // "ليس الآن" on the install window
   const NOTICE_DISMISS_KEY = "sekka_installed_notice_dismissed_at"; // "ليس الآن" on the success window
-  const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;               // 7 days
+  const SNOOZE_MS = 24 * 60 * 60 * 1000;               // 7 days
   const PROMPT_GRACE_MS = 1200;                            // wait for beforeinstallprompt before deciding
   const SPLASH_MAX_WAIT_MS = 6000;                         // never wait for the splash longer than this
   const CLOSE_MS = 260;                                    // must be >= CSS transition time
@@ -90,7 +90,11 @@
     event.preventDefault();      // keep the real prompt for our own button
     deferredPrompt = event;
     promptSeen = true;
-    if (!overlay || overlay.hidden || justInstalled || busy) return;
+    if (!overlay || overlay.hidden) {
+      if (!isStandalone() && !justInstalled && !isSnoozed(DISMISS_KEY) && document.body) openModal("install");
+      return;
+    }
+    if (justInstalled || busy) return;
     // The window opened before the event arrived: upgrade guidance (or a stale "installed" notice) to the real install window.
     if (view === "guide" || view === "success") setView("install");
   });
@@ -378,16 +382,14 @@
 
   function scheduleShow() {
     const startedAt = Date.now();
+    const wait = isIOS() ? 700 : 3500;
     const tick = () => {
-      if (isStandalone()) return;
-      const waited = Date.now() - startedAt;
-      if (waited < PROMPT_GRACE_MS || (!splashGone() && waited < SPLASH_MAX_WAIT_MS)) {
-        window.setTimeout(tick, 250);
-        return;
-      }
+      if (isStandalone() || justInstalled) return;
+      if (overlay && !overlay.hidden) return;
+      if (Date.now() - startedAt < wait) { window.setTimeout(tick, 250); return; }
       decideAndShow();
     };
-    window.setTimeout(tick, PROMPT_GRACE_MS);
+    window.setTimeout(tick, 250);
   }
 
   function detectInstalledApps() {
