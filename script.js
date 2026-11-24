@@ -22,7 +22,7 @@ const CONFIG = { riderEnabled: false };
 const need = () => { if (!db) throw new Error('NOT_CONNECTED'); };
 const mapUser = u => ({ name: (u.user_metadata && u.user_metadata.display_name) || u.email, email: u.email });
 const ST = { pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض' };
-let drvLoaded = false;
+let drvLoaded = false, drvPromise = null;
 function errMsg(e) {
   const m = String((e && (e.message || e.code)) || '').toLowerCase();
   if (m === 'not_connected') return 'تعذّر الاتصال بالخادم حاليًا، لم يتم حفظ بياناتك. حاول مرة أخرى لاحقًا.';
@@ -181,7 +181,7 @@ const routes = {
     <form data-form="forgot" novalidate>${fld('البريد الإلكتروني', 'email', 'email', 'required dir="ltr"')}<button class="btn" type="submit">إرسال الرابط</button></form></div>
     ${btn('العودة لتسجيل الدخول', 'login', 'sec')}`,
 
-  newpw: () => `${hdr('كلمة مرور جديدة', false)}<div class="card"><form data-form="newpw" novalidate>${fld('كلمة المرور الجديدة (8 أحرف على الأقل)', 'pw', 'password', 'required autocomplete="new-password"')}${fld('تأكيد كلمة المرور', 'pw2', 'password', 'required autocomplete="new-password"')}<button class="btn" type="submit">حفظ كلمة المرور</button></form></div>`,
+  newpw: () => `${hdr('كلمة مرور جديدة')}<div class="card"><form data-form="newpw" novalidate>${fld('كلمة المرور الجديدة (8 أحرف على الأقل)', 'pw', 'password', 'required autocomplete="new-password"')}${fld('تأكيد كلمة المرور', 'pw2', 'password', 'required autocomplete="new-password"')}<button class="btn" type="submit">حفظ كلمة المرور</button></form></div>`,
 
 verify: () => `${hdr('تأكيد البريد الإلكتروني')}
 <div class="card">
@@ -192,11 +192,20 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   <button class="btn sec" data-go="login">العودة لتسجيل الدخول</button>
 </div>`,
 
-  profile: () => `${hdr('الملف الشخصي')}
-    ${S.user ? `<div class="avatar">${ic('user')}</div>
-    <div class="card"><div class="row"><span>الاسم</span><b>${esc(S.user.name)}</b></div><div class="row"><span>البريد الإلكتروني</span><b dir="ltr">${esc(S.user.email)}</b></div></div>
-    <button class="btn sec" data-act="logout">${ic('out')} تسجيل الخروج</button>`
-    : `<div class="card">${empty('user', 'أنت غير مسجّل الدخول', 'سجّل الدخول لعرض بيانات حسابك')}${btn('تسجيل الدخول', 'login')}${btn('إنشاء حساب جديد', 'signup', 'sec')}</div>`}`,
+  profile: () => {
+    if (!S.user) return `${hdr('الملف الشخصي')}<div class="card">${empty('user', 'أنت غير مسجّل الدخول', 'سجّل الدخول لعرض بيانات حسابك')}${btn('تسجيل الدخول', 'login')}${btn('إنشاء حساب جديد', 'signup', 'sec')}</div>`;
+    const p = S.prof, st = k => k === 'approved' ? 'ok' : (k === 'rejected' ? '' : 'wait');
+    const kv = (l, v, ltr) => v ? `<div class="row"><span>${l}</span><b${ltr ? ' dir="ltr"' : ''}>${esc(v)}</b></div>` : '';
+    let since = ''; try { since = p ? new Date(p.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' }) : ''; } catch (e) {}
+    return `${hdr('الملف الشخصي')}
+    <div class="phero"><div class="avatar">${S.avatar ? `<img src="${esc(S.avatar)}" alt="">` : ic('user')}</div><h2>${esc(p ? p.full_name : S.user.name)}</h2><p dir="ltr">${esc(S.user.email)}</p>${p ? pill(ST[p.approval_status] || '—', st(p.approval_status)) : pill('حساب مستخدم', 'off')}</div>
+    ${p ? `<div class="card kv"><h3>البيانات الشخصية</h3>${kv('الاسم الكامل', p.full_name)}${kv('رقم الهاتف', p.phone, 1)}${kv('رقم بديل', p.phone2, 1)}${kv('المنطقة', [p.area, p.place].filter(Boolean).join(' - '))}${kv('عضو منذ', since)}</div>
+    <div class="card kv"><h3>بيانات المركبة</h3>${kv('النوع', VT[p.vehicle_type])}${kv('الماركة والموديل', `${p.brand} ${p.model}`)}${kv('سنة الصنع', String(p.year))}${kv('اللون', p.color)}${kv('رقم اللوحة', p.plate)}${kv('علاقتك بالمركبة', p.relation === 'owner' ? 'مالك' : 'مفوَّض')}<div class="row"><span>حالة المركبة</span>${pill(ST[p.vehicle_status] || '—', st(p.vehicle_status))}</div></div>`
+    : `<div class="card kv"><h3>بيانات الحساب</h3>${kv('الاسم', S.user.name)}${kv('البريد الإلكتروني', S.user.email, 1)}</div>${btn('انضم كسائق', 'd-start', 'lite')}`}
+    <div class="card" style="padding:6px 14px">${menu('lock', 'تغيير كلمة المرور', 'newpw')}${menu('help', 'المساعدة والشكاوى', 'help')}</div>
+    ${p ? '<p class="note" style="text-align:center">لتعديل بياناتك بعد الاعتماد تواصل مع إدارة سِكّة.</p>' : ''}
+    <button class="btn sec" data-act="logout">${ic('out')} تسجيل الخروج</button>`;
+  },
 
   /* ----- السائق ----- */
   'd-start': () => `${hdr('سائقو سِكّة')}
@@ -267,8 +276,8 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
     <div class="card">${empty('wallet', 'لا توجد أرباح بعد', 'تُعرض الأرباح والعمولات هنا بعد إتمام الرحلات، وتُحدَّد نسبة العمولة من إدارة سِكّة.')}</div>`,
   'd-rate': () => `${hdr('التقييمات')}<div class="card">${empty('star', 'لا توجد تقييمات بعد', 'تظهر تقييمات الركاب لك هنا بعد رحلاتك.')}</div>`,
   'd-notif': () => `${hdr('الإشعارات')}<div class="card"><div class="row"><span class="l">${ic('bell')}<span>أكمل بيانات التسجيل ليتم اعتماد حسابك ومركبتك.</span></span></div></div>`,
-  'd-me': () => `${hdr('حسابي', false)}${S.user ? `<div class="avatar">${S.reg.photo ? `<img src="${S.reg.photo}" alt="">` : ic('user')}</div><p class="welcome">${esc(S.user.name)}</p>` : ''}
-    <div class="card" style="padding:6px 14px">${menu('user', 'الملف الشخصي', 'profile')}${menu('steer', 'تسجيل بيانات السائق', 'd-reg1')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('help', 'المساعدة والشكاوى', 'help')}
+  'd-me': () => `${hdr('حسابي', false)}${S.user ? `<div class="avatar">${(S.avatar || S.reg.photo) ? `<img src="${esc(S.avatar || S.reg.photo)}" alt="">` : ic('user')}</div><p class="welcome">${esc(S.user.name)}</p>` : ''}
+    <div class="card" style="padding:6px 14px">${menu('user', 'الملف الشخصي', 'profile')}${S.reg.submitted ? '' : menu('steer', 'تسجيل بيانات السائق', 'd-reg1')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('help', 'المساعدة والشكاوى', 'help')}
     <button class="menu" data-go="home"><span class="l">${ic('swap')}تغيير نوع المستخدم</span>${ic('chev')}</button>
     ${S.user ? `<button class="menu" data-act="logout"><span class="l">${ic('out')}تسجيل الخروج</span>${ic('chev')}</button>` : menu('lock', 'تسجيل الدخول', 'login')}</div>`,
 
@@ -309,6 +318,7 @@ const stack = []; let cur = 'home';
 function riderOpen() { return CONFIG.riderEnabled === true; }
 function go(name, replace) {
   if (/^d-reg[123]$/.test(name) && !S.user) { toast('سجّل الدخول أو أنشئ حسابًا أولًا', true); name = 'login'; }
+  if (/^d-reg[123]$/.test(name) && S.reg.submitted) { toast(S.drv.approved ? 'حسابك معتمد، لتعديل بياناتك تواصل مع الإدارة' : 'طلبك قيد المراجعة بالفعل', true); name = 'd-home'; }
   if (name.startsWith('r-') && !riderOpen()) name = 'r-gate';
   if (!routes[name]) name = 'home';
   if (!replace && cur !== name) { stack.push(cur); try { history.pushState(null, ''); } catch (e) {} }
@@ -381,7 +391,7 @@ const forms = {
     const d = fd(f);
     if (d.pw.length < 8) return fail('كلمة المرور يجب ألا تقل عن 8 أحرف', f.pw);
     if (d.pw !== d.pw2) return fail('كلمتا المرور غير متطابقتين', f.pw2);
-    send(async () => { await API.updatePassword(d.pw); toast('تم تغيير كلمة المرور'); go('home', true); });
+    send(async () => { await API.updatePassword(d.pw); toast('تم تغيير كلمة المرور'); go(S.hasDriver ? 'd-home' : 'home', true); });
   },
   reg1(f) {
     const d = fd(f);
@@ -475,37 +485,46 @@ document.addEventListener('change', e => {
 
 /* ===== البداية ===== */
 const RECOVERY = /type=recovery/.test(location.hash);
+let resolveReady; const READY = new Promise(r => { resolveReady = r; });
 function resetSession() {
-  S.user = null; S.reg = {}; S.photoFile = null; drvLoaded = false;
+  if (S.avatar) { try { URL.revokeObjectURL(S.avatar); } catch (e) {} }
+  S.user = null; S.reg = {}; S.photoFile = null; S.prof = null; S.hasDriver = false; S.avatar = null; drvLoaded = false; drvPromise = null;
   S.drv = { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false };
   stack.length = 0; go('home', true);
 }
 async function loadDriver() {
   try {
     const p = await API.myDriver(); if (!p) return;
+    S.prof = p; S.hasDriver = true;
     S.reg.submitted = p.approval_status !== 'rejected'; S.reg.vtype = p.vehicle_type; S.reg.rel = p.relation;
     S.drv.approval = ST[p.approval_status] || p.approval_status; S.drv.vehicle = ST[p.vehicle_status] || p.vehicle_status;
     S.drv.approved = p.approval_status === 'approved'; S.drv.vehApproved = p.vehicle_status === 'approved';
     S.drv.online = !!p.is_online && S.drv.approved && S.drv.vehApproved;
-    if (cur.startsWith('d-')) render();
+    if (cur === 'home') go('d-home', true); else if (cur.startsWith('d-') || cur === 'profile') render();
+    if (p.photo_path && !S.avatar) {
+      try {
+        const { data } = await db.storage.from('driver-docs').download(p.photo_path);
+        if (data) { S.avatar = URL.createObjectURL(data); if (cur === 'profile' || cur === 'd-me') render(); }
+      } catch (e) {}
+    }
   } catch (e) { console.error('loadDriver', e); }
 }
-function afterAuth() { if (drvLoaded) return; drvLoaded = true; setTimeout(loadDriver, 0); }
+function afterAuth() {
+  if (drvLoaded) return drvPromise;
+  drvLoaded = true;
+  drvPromise = new Promise(r => setTimeout(r, 0)).then(loadDriver);
+  return drvPromise;
+}
 function boot() {
   let seen = false;
   try { seen = sessionStorage.getItem('sekka_splash') === '1'; } catch (e) {}
   const sp = $('#splash');
   go('home', true);
   try { history.replaceState(null, ''); } catch (e) {}
-  if (seen) { sp.hidden = true; } else {
-    setTimeout(() => {
-      sp.classList.add('out');
-      try { sessionStorage.setItem('sekka_splash', '1'); } catch (e) {}
-      setTimeout(() => { sp.hidden = true; }, 700);
-    }, 2200);
-  }
+  const hideSplash = () => { sp.classList.add('out'); try { sessionStorage.setItem('sekka_splash', '1'); } catch (e) {} setTimeout(() => { sp.hidden = true; }, 700); };
+  Promise.all([new Promise(r => setTimeout(r, seen ? 0 : 2200)), Promise.race([READY, new Promise(r => setTimeout(r, 4500))])]).then(hideSplash);
   if (RECOVERY) go('newpw', true);
-  if (!db) { toast('تعذّر تحميل خدمة الحساب، تأكد من الاتصال بالإنترنت', true); return; }
+  if (!db) { toast('تعذّر تحميل خدمة الحساب، تأكد من الاتصال بالإنترنت', true); resolveReady(); return; }
   db.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { go('newpw', true); return; }
     if (session && session.user) {
@@ -514,11 +533,11 @@ function boot() {
       afterAuth();
     } else if (event === 'SIGNED_OUT' && S.user) { resetSession(); }
   });
-  db.auth.getSession().then(({ data, error }) => {
+  db.auth.getSession().then(async ({ data, error }) => {
     if (error) throw error;
     const u = data.session && data.session.user;
-    if (u) { S.user = mapUser(u); S.drv.account = 'نشط'; afterAuth(); render(); }
-  }).catch(e => console.error('Session restore error:', e));
+    if (u) { S.user = mapUser(u); S.drv.account = 'نشط'; render(); await afterAuth(); }
+  }).catch(e => console.error('Session restore error:', e)).finally(resolveReady);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 if ('serviceWorker' in navigator) {
