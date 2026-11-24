@@ -127,3 +127,12 @@ button{cursor:pointer;border:0;background:none}
 .sheet h3{color:var(--g1);margin-bottom:8px}.sheet p{margin-bottom:8px;font-size:.93rem}
 @media(min-width:700px){.shell{margin-block:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Profile */
+.phero{background:linear-gradient(135deg,var(--g1),#0b6b52);color:#fff;border-radius:var(--r);padding:22px 16px;margin-top:8px;text-align:center;box-shadow:var(--sh)}
+.phero .avatar{width:96px;height:96px;margin:0 auto 10px;border-color:rgba(255,255,255,.9)}
+.phero h2{font-size:1.25rem;font-weight:800}
+.phero p{opacity:.85;font-size:.9rem;margin-bottom:8px;word-break:break-all}
+.kv h3{margin-bottom:4px}
+.kv .row>span{color:var(--mut);font-size:.9rem}
+.kv .row>b{font-size:.95rem;text-align:left}
