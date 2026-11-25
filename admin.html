@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://aawuvkpmcoahhsczryid.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>سِكّة — لوحة الإدارة</title>
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<main id="login">
+  <form id="lf" class="lc" novalidate>
+    <img src="icon-192.png" width="72" height="72" alt="سِكّة">
+    <h1>لوحة إدارة سِكّة</h1>
+    <label for="le">البريد الإلكتروني</label><input id="le" type="email" autocomplete="username" required dir="ltr">
+    <label for="lp">كلمة المرور</label><input id="lp" type="password" autocomplete="current-password" required dir="ltr">
+    <p id="lerr" class="err" role="alert"></p>
+    <button class="btn" type="submit">تسجيل الدخول</button>
+  </form>
+</main>
+<div id="app" hidden>
+  <aside>
+    <div class="brand"><img src="icon-192.png" width="40" height="40" alt=""><b>سِكّة</b></div>
+    <nav id="nav"></nav>
+    <div class="me"><span id="me" dir="ltr"></span><button class="lk" data-a="out">تسجيل الخروج</button></div>
+  </aside>
+  <section id="main"></section>
+  <div id="ov" hidden><div id="panel" role="dialog" aria-modal="true"></div></div>
+</div>
+<div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
