@@ -15,6 +15,16 @@ const LOGO = { icon: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAU
 /* ===== الإعدادات =====
    riderEnabled: لا يكفي تغييرها من الواجهة. عند ربط Supabase تُقرأ من جدول إعدادات
    في الخادم، ويجب أن تتحقق سياسات RLS من إتاحة طلب الرحلات للراكب أيضًا. */
+/* ===== المظهر (فاتح/داكن/تلقائي) ===== */
+const THEME_KEY = 'sekka_theme';
+const themeMode = () => { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { return 'auto'; } };
+function applyTheme(m) {
+  const dark = m === 'dark' || (m !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.classList.toggle('dk', dark);
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = dark ? '#0b1713' : '#064e3b';
+}
+applyTheme(themeMode());
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themeMode() === 'auto') applyTheme('auto'); }); } catch (e) {}
 const CONFIG = { riderEnabled: false };
 
 /* ===== طبقة الربط بالخادم =====
@@ -37,6 +47,10 @@ function errMsg(e) {
   if (m === 'type' || m === 'img') return 'نوع الملف غير مدعوم، ارفع صورة أو PDF';
   if (m.includes('failed to fetch') || m.includes('network')) return 'تعذّر الاتصال بالإنترنت';
   if (m.includes('row-level security') || m.includes('locked') || m.includes('permission')) return 'غير مسموح بهذا الإجراء حاليًا';
+  if (m.includes('too fast')) return 'استنى ثانية بين الرسائل';
+  if (m.includes('role set')) return 'تم اختيار نوع الحساب من قبل';
+  if (m.includes('bad phone')) return 'رقم الهاتف غير صحيح';
+  if (m.includes('bad name')) return 'الاسم يجب أن يكون من 2 إلى 40 حرفًا';
   if (m.includes('price_changed')) return 'تغيّر السعر، راجع السعر الجديد ثم أكّد';
   if (m.includes('out of area')) return 'الموقع خارج نطاق الخدمة';
   if (m.includes('too short')) return 'المسافة قصيرة جدًا';
@@ -69,7 +83,7 @@ const API = {
   async uid() { need(); const { data } = await db.auth.getUser(); if (!data || !data.user) throw new Error('AUTH'); return data.user.id; },
   async signUp(d) {
     need();
-    const { data, error } = await db.auth.signUp({ email: d.email, password: d.password, options: { emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/', data: { display_name: d.name } } });
+    const { data, error } = await db.auth.signUp({ email: d.email, password: d.password, options: { emailRedirectTo: 'https://sekkaofficial.github.io/sekka-platform/', data: { display_name: d.name, phone: String(d.phone || '').replace(/\s/g, '') } } });
     if (error) throw error; return data;
   },
   async signIn(d) { need(); const { data, error } = await db.auth.signInWithPassword({ email: d.email, password: d.password }); if (error) throw error; return data.user; },
@@ -102,7 +116,7 @@ const API = {
 const S = {
   user: null,
   reg: {},
-  ride: {}, rd: null, dr: null, reqs: [], cfg: { fares: {} },
+  ride: {}, me: null, notifs: { unread: 0, items: [] }, rd: null, dr: null, reqs: [], cfg: { fares: {} },
   drv: { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false },
   stars: 0
 };
@@ -135,6 +149,17 @@ const P = {
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'
 };
+Object.assign(P, {
+  shield: '<path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+  moon: '<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  flag: '<path d="M5 21V4M5 4h12l-2 4 2 4H5"/>'
+});
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ''}</svg>`;
 
 /* ===== عناصر مساعدة للقوالب ===== */
@@ -146,6 +171,19 @@ const fld = (label, name, type = 'text', extra = '') => `<label class="f"><span>
 const btn = (t, go, cls = '') => `<button class="btn ${cls}" data-go="${go}">${t}</button>`;
 const menu = (i, t, go) => `<button class="menu" data-go="${go}"><span class="l">${ic(i)}${t}</span>${ic('chev')}</button>`;
 const mapBox = (txt) => `<div class="map"><svg viewBox="0 0 300 220" preserveAspectRatio="none"><path d="M40 180 C90 150 100 90 150 100 S230 60 262 40" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 10"/><circle cx="40" cy="180" r="9" fill="#064e3b"/><circle cx="262" cy="40" r="9" fill="#10b981"/></svg><p>${txt || 'حدّد موقع الانطلاق والوجهة على الخريطة من الأسفل'}</p></div>`;
+const avUrl = p => p ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${encodeURI(p)}` : '';
+const avatarEl = (p, nm, big) => p ? `<img class="av${big ? ' big' : ''}" src="${esc(avUrl(p))}" alt="">` : `<span class="av${big ? ' big' : ''}">${esc(String(nm || '؟').trim().charAt(0) || '؟')}</span>`;
+const myName = () => (S.me && S.me.name) || (S.user && S.user.name) || '';
+const ago = t => { const m = Math.max(0, Math.round((Date.now() - new Date(t)) / 60000)); return m < 1 ? 'الآن' : m < 60 ? `منذ ${m} د` : m < 1440 ? `منذ ${Math.round(m / 60)} س` : new Date(t).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }); };
+let AC;
+function beep(f = 880, d = 0.16, n = 1) { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); for (let i = 0; i < n; i++) { const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + i * (d + 0.08); o.frequency.value = f; g.gain.value = 0.07; o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d); } } catch (e) {} }
+function resizeImg(file, max, q) {
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u); c.toBlob(b => b ? res(b) : rej(new Error('IMG')), 'image/jpeg', q); };
+    im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('IMG')); }; im.src = u;
+  });
+}
 const driverGate = () => !S.drv.approved || !S.drv.vehApproved;
 const logoImg = `<img src="${LOGO.icon}" alt="سِكّة">`;
 
@@ -165,16 +203,35 @@ const LOADING = '<div class="card" style="text-align:center"><div class="spin"><
 const rideRow = x => `<div class="card rise"><div class="row"><span>${esc(x.pickup)} ← ${esc(x.dest)}</span><b>${esc(x.fare)} ج</b></div><div class="row"><small>${new Date(x.created).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</small>${pill(x.status === 'completed' ? 'مكتملة' : 'ملغاة', x.status === 'completed' ? 'ok' : 'off')}</div></div>`;
 const routes = {
   home: () => `
-    <div class="brand">${logoImg}<h2>سِكّة — مشوارك أسهل</h2><p>منصة النقل المحلية في رشيد</p></div>
+    <div class="home-topbar" aria-label="أدوات الصفحة الرئيسية">
+      <div class="home-logo">${logoImg}</div>
+      <div class="home-tools">
+        <button class="home-tool-btn has-badge" type="button" data-go="notif" aria-label="الإشعارات" title="الإشعارات">
+          ${ic('bell')}<span class="nb" hidden></span>
+        </button>
+        <button class="home-tool-btn" type="button" data-act="theme" aria-label="تغيير المظهر" title="تغيير المظهر">${ic('moon')}</button>
+        <button class="home-tool-btn" type="button" data-go="help" aria-label="الدعم" title="الدعم">${ic('help')}</button>
+      </div>
+    </div>
+    <div class="brand home-brand"><h2>سِكّة — مشوارك أسهل</h2><p>منصة النقل المحلية في رشيد</p></div>
     <p class="welcome">أهلًا بك في سِكّة، اختر كيف تريد المتابعة</p>
     <button class="role" data-go="r-start"><span class="big">${ic('user')}</span><span><b>أنا راكب</b><span>اطلب مشوارك بسهولة</span></span></button>
     <button class="role" data-go="d-start"><span class="big">${ic('steer')}</span><span><b>أنا سائق</b><span>انضم إلى فريق سائقين سِكّة</span></span></button>
     <div class="links">${S.user ? `<button class="link" data-go="profile">ملفي الشخصي</button>` : `<button class="link" data-go="login">تسجيل الدخول</button><button class="link" data-go="signup">إنشاء حساب جديد</button>`}</div>`,
 
-  signup: () => `${hdr('إنشاء حساب جديد')}
-    <form data-form="signup" novalidate>
-      ${fld('الاسم الكامل', 'name', 'text', 'required autocomplete="name"')}
+  welcome: () => `<div class="wl"><div class="wl-hero"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><div class="wl-logo">${logoImg}</div><h1>سِكّة</h1><p>مشوارك أسهل في رشيد</p></div>
+    <div class="wl-card rise"><h2>ابدأ رحلتك مع سِكّة</h2><ul class="feat">
+      <li><span>${ic('shield')}</span><div><b>أمان في كل رحلة</b><small>رمز تأكيد يربطك بسائقك المعتمد</small></div></li>
+      <li><span>${ic('tag')}</span><div><b>أسعار واضحة</b><small>تعرف أجرتك قبل ما تطلب</small></div></li>
+      <li><span>${ic('chat')}</span><div><b>تواصل مباشر</b><small>اتصال ورسائل مع السائق أثناء الرحلة</small></div></li></ul>
+      <button class="btn" data-go="signup">إنشاء حساب جديد</button><button class="btn sec" data-go="login">لدي حساب بالفعل</button>
+      <p class="note c">بالمتابعة أنت توافق على <button class="link" data-act="legal" data-v="terms">الشروط</button> و<button class="link" data-act="legal" data-v="privacy">سياسة الخصوصية</button></p></div></div>`,
+
+  signup: () => `<div class="ah rise"><button class="ib" data-go="welcome" aria-label="رجوع">${ic('chev')}</button><div class="wl-logo sm">${logoImg}</div><h1>إنشاء حساب جديد</h1><p>دقيقة واحدة وتبدأ مشوارك</p></div>
+    <form data-form="signup" novalidate class="rise">
+      ${fld('الاسم الكامل', 'name', 'text', 'required autocomplete="name" maxlength="40"')}
       ${fld('البريد الإلكتروني', 'email', 'email', 'required dir="ltr" autocomplete="email"')}
+      ${fld('رقم الهاتف (للتواصل أثناء الرحلة)', 'phone', 'tel', 'required inputmode="tel" dir="ltr" autocomplete="tel" maxlength="11" placeholder="01012345678"')}
       ${fld('كلمة المرور (8 أحرف على الأقل)', 'pw', 'password', 'required autocomplete="new-password"')}
       ${fld('تأكيد كلمة المرور', 'pw2', 'password', 'required autocomplete="new-password"')}
       <label class="chk"><input type="checkbox" name="terms"><span>أوافق على <button type="button" class="link" data-act="legal" data-v="terms">الشروط والأحكام</button> و<button type="button" class="link" data-act="legal" data-v="privacy">سياسة الخصوصية</button></span></label>
@@ -182,13 +239,52 @@ const routes = {
     </form>
     <div class="links"><span>لديك حساب؟</span><button class="link" data-go="login">تسجيل الدخول</button></div>`,
 
-  login: () => `${hdr('تسجيل الدخول')}
-    <form data-form="login" novalidate>
+  login: () => `<div class="ah rise"><button class="ib" data-go="welcome" aria-label="رجوع">${ic('chev')}</button><div class="wl-logo sm">${logoImg}</div><h1>أهلًا بعودتك</h1><p>سجّل دخولك لمتابعة مشوارك</p></div>
+    <form data-form="login" novalidate class="rise">
       ${fld('البريد الإلكتروني', 'email', 'email', 'required dir="ltr" autocomplete="email"')}
       ${fld('كلمة المرور', 'pw', 'password', 'required autocomplete="current-password"')}
       <button class="btn" type="submit">دخول</button>
     </form>
     <div class="links"><button class="link" data-go="forgot">نسيت كلمة المرور؟</button><button class="link" data-go="signup">إنشاء حساب جديد</button></div>`,
+
+  rolepick: () => `<div class="ah rise"><div class="wl-logo sm">${logoImg}</div><h1>مرحبًا ${esc(myName())}</h1><p>اختر كيف تريد استخدام سِكّة</p></div>
+    <button class="rolec rise" data-act="pickrole" data-v="rider"><span class="rc-i">${ic('user')}</span><span class="fx"><b>أنا راكب</b><small>اطلب مشوارك وتابع سائقك لحظة بلحظة</small></span>${ic('chev')}</button>
+    <button class="rolec rise" data-act="pickrole" data-v="driver"><span class="rc-i">${ic('steer')}</span><span class="fx"><b>أنا سائق</b><small>استقبل الطلبات واكسب من مشاويرك</small></span>${ic('chev')}</button>
+    <p class="note c">اختيارك بيتحفظ مع حسابك وهتفتح عليه تلقائيًا. لتغييره تواصل مع الدعم.</p>`,
+
+  complete: () => `<div class="ah rise"><div class="wl-logo sm">${logoImg}</div><h1>أكمل بياناتك</h1><p>رقم الهاتف مطلوب للتواصل أثناء الرحلات</p></div>
+    <form data-form="complete" novalidate class="rise">${fld('رقم الهاتف', 'phone', 'tel', 'required inputmode="tel" dir="ltr" maxlength="11" placeholder="01012345678"')}<button class="btn" type="submit">حفظ ومتابعة</button></form>
+    <button class="btn sec" data-act="logout">تسجيل الخروج</button>`,
+
+  wait: () => `<div class="wt"><div class="wl-logo">${logoImg}</div>${S.meErr ? `<p>تعذّر تحميل بياناتك، تأكد من الاتصال</p><button class="btn" data-act="retry">إعادة المحاولة</button><button class="btn sec" data-act="logout">تسجيل الخروج</button>` : '<div class="spin"></div>'}</div>`,
+
+  account: () => {
+    if (!S.user) return `${hdr('حسابي', false)}<div class="card">${empty('user', 'أنت غير مسجّل الدخول', 'سجّل الدخول للمتابعة')}${btn('تسجيل الدخول', 'login')}</div>`;
+    const p = S.prof, m = S.me || {}, drv = m.role === 'driver', kv = (l, v) => v ? `<div class="row"><span>${l}</span><b>${esc(v)}</b></div>` : '';
+    return `${hdr('حسابي', false)}<div class="phero rise"><button class="avedit" data-go="editp" aria-label="تعديل الصورة">${avatarEl(m.avatar, m.name, true)}<i>${ic('camera')}</i></button><h2>${esc(m.name || '')}</h2><p dir="ltr">${esc(m.phone || '')}</p><p dir="ltr" class="sub">${esc(S.user.email)}</p>${pill(drv ? 'سائق' : 'راكب', 'ok')}</div>
+    ${drv && p ? `<div class="card kv rise"><h3>بيانات المركبة</h3>${kv('حالة الحساب', ST[p.approval_status])}${kv('النوع', VT[p.vehicle_type])}${kv('المركبة', `${p.brand} ${p.model} · ${p.color}`)}${kv('اللوحة', p.plate)}</div>` : ''}
+    <div class="card rise" style="padding:6px 14px">${menu('edit', 'تعديل الملف الشخصي', 'editp')}${menu('lock', 'تغيير كلمة المرور', 'newpw')}${menu('bell', 'الإشعارات', 'notif')}${drv ? menu('star', 'التقييمات', 'd-rate') : ''}${drv && !S.reg.submitted ? menu('steer', 'تسجيل بيانات السائق', 'd-reg1') : ''}${menu('help', 'المساعدة والشكاوى', 'help')}</div>
+    <div class="card rise" style="padding:6px 14px"><button class="menu" data-act="theme"><span class="l">${ic('moon')}المظهر</span><b class="val">${{ auto: 'تلقائي', light: 'فاتح', dark: 'داكن' }[themeMode()]}</b></button><button class="menu" data-act="push"><span class="l">${ic('bell')}إشعارات الهاتف</span><b class="val" id="pushs">…</b></button></div>
+    <button class="btn sec" data-act="logout">${ic('out')} تسجيل الخروج</button>`;
+  },
+  profile: () => routes.account(),
+  'd-me': () => routes.account(),
+  'r-prof': () => routes.account(),
+
+  editp: () => { const m = S.me || {}; return `${hdr('تعديل الملف الشخصي')}<form data-form="editp" novalidate class="rise"><label class="avpick"><span id="avprev">${avatarEl(m.avatar, m.name, true)}</span><span class="lk2">${ic('camera')} تغيير الصورة</span><input type="file" name="avatar" accept="image/jpeg,image/png,image/webp" hidden></label>
+    <label class="f"><span>الاسم المعروض</span><input name="name" value="${esc(m.name || '')}" maxlength="40" autocomplete="name" required></label>
+    <label class="f"><span>رقم الهاتف</span><input name="phone" value="${esc(m.phone || '')}" dir="ltr" inputmode="tel" maxlength="11" required></label>
+    ${m.role === 'driver' ? '<p class="note">الاسم القانوني المسجّل لدى الإدارة لا يتغيّر من هنا، والاسم المعروض هو اللي يظهر للركاب.</p>' : ''}
+    <button class="btn" type="submit">حفظ التغييرات</button></form>`; },
+
+  chat: () => { const r = chatRide();
+    if (!r) return `${hdr('المحادثة')}<div class="card">${empty('chat', 'لا توجد رحلة حالية', 'المحادثة متاحة أثناء الرحلة فقط.')}</div>`;
+    const drv = S.me && S.me.role === 'driver', nm = drv ? r.rider : (r.driver && r.driver.name), av = drv ? r.ravatar : (r.driver && r.driver.avatar), ph = (drv ? r.rphone : (r.driver && r.driver.phone)) || '';
+    return `<header class="hdr ch-h"><button class="ib" data-back aria-label="رجوع">${ic('chev')}</button><div class="row">${avatarEl(av, nm)}<h1>${esc(nm || '')}</h1></div>${phoneOk(ph) ? `<a class="ib" href="tel:${ph}" aria-label="اتصال">${ic('phone')}</a>` : '<span class="ib ghost"></span>'}</header><div class="chat" id="cmsgs" aria-live="polite"></div><form data-form="chat" class="cform" novalidate><input name="m" maxlength="500" autocomplete="off" placeholder="اكتب رسالة…" aria-label="رسالة"><button class="send" type="submit" aria-label="إرسال">${ic('send')}</button></form>`; },
+
+  notif: () => `${hdr('الإشعارات')}${S.notifs.items.length ? S.notifs.items.map(x => `<button class="nitem rise ${x.read ? '' : 'new'}" data-act="nopen" data-v="${esc((x.data && x.data.url) || '')}"><span class="ni">${ic(NI[x.kind] || 'bell')}</span><span class="fx"><b>${esc(x.title)}</b><small>${esc(x.body)}</small></span><time>${ago(x.at)}</time></button>`).join('') : `<div class="card">${empty('bell', 'لا توجد إشعارات', 'ستظهر هنا تنبيهات رحلاتك ورسائلك.')}</div>`}`,
+  'd-notif': () => routes.notif(),
+  'r-notif': () => routes.notif(),
 
   forgot: () => `${hdr('استعادة كلمة المرور')}
     <div class="card"><p>اكتب بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.</p>
@@ -292,12 +388,6 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   'd-trips': () => `${hdr('سجل الرحلات', false)}${S.hist === undefined ? LOADING : S.hist.length ? S.hist.map(rideRow).join('') : `<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستجد هنا رحلاتك المكتملة بعد أول رحلة.')}</div>`}`,
   'd-earn': () => `${hdr('الأرباح والعمولات', false)}${S.dstat === undefined ? LOADING : S.dstat ? `<div class="grid2"><div class="stat rise"><small>صافي الأرباح</small><b>${esc(S.dstat.gross - S.dstat.commission)} ج</b></div><div class="stat rise"><small>عمولة سِكّة</small><b>${esc(S.dstat.commission)} ج</b></div><div class="stat rise"><small>الرحلات المكتملة</small><b>${esc(S.dstat.trips)}</b></div><div class="stat rise"><small>تقييمك</small><b>${S.dstat.avg ? esc(S.dstat.avg) : '—'}</b></div></div>` : `<div class="card">${empty('wallet', 'لا توجد أرباح بعد', 'تظهر الأرباح هنا بعد إتمام الرحلات.')}</div>`}`,
   'd-rate': () => { const L = (S.hist || []).filter(x => x.rating); return `${hdr('التقييمات')}${S.hist === undefined ? LOADING : L.length ? L.map(x => `<div class="card rise"><div class="row"><b>${'★'.repeat(x.rating)}${'☆'.repeat(5 - x.rating)}</b><small>${new Date(x.created).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</small></div>${x.note ? `<p>${esc(x.note)}</p>` : ''}</div>`).join('') : `<div class="card">${empty('star', 'لا توجد تقييمات بعد', 'تظهر تقييمات الركاب لك هنا بعد رحلاتك.')}</div>`}`; },
-  'd-notif': () => `${hdr('الإشعارات')}<div class="card"><div class="row"><span class="l">${ic('bell')}<span>أكمل بيانات التسجيل ليتم اعتماد حسابك ومركبتك.</span></span></div></div>`,
-  'd-me': () => `${hdr('حسابي', false)}${S.user ? `<div class="avatar">${(S.avatar || S.reg.photo) ? `<img src="${esc(S.avatar || S.reg.photo)}" alt="">` : ic('user')}</div><p class="welcome">${esc(S.user.name)}</p>` : ''}
-    <div class="card" style="padding:6px 14px">${menu('user', 'الملف الشخصي', 'profile')}${S.reg.submitted ? '' : menu('steer', 'تسجيل بيانات السائق', 'd-reg1')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('help', 'المساعدة والشكاوى', 'help')}
-    <button class="menu" data-go="home"><span class="l">${ic('swap')}تغيير نوع المستخدم</span>${ic('chev')}</button>
-    ${S.user ? `<button class="menu" data-act="logout"><span class="l">${ic('out')}تسجيل الخروج</span>${ic('chev')}</button>` : menu('lock', 'تسجيل الدخول', 'login')}</div>`,
-
   /* ----- الراكب (واجهة جاهزة ومقفولة عن الاستخدام العام) ----- */
   'r-gate': () => `${hdr('خدمة الركاب', false)}<div class="card" style="margin-top:40px">${empty('clock', 'خدمة الركاب ستتوفر قريبًا في رشيد', 'نعمل على تجهيز الخدمة لتصلك بأفضل صورة. يمكنك الانضمام إلينا كسائق من الصفحة الرئيسية.')}</div>${btn('العودة إلى الصفحة الرئيسية', 'home')}`,
   'r-start': () => routes['r-home'](),
@@ -323,7 +413,6 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   'r-hist': () => `${hdr('سجل الرحلات', false)}${S.hist === undefined ? LOADING : S.hist.length ? S.hist.map(rideRow).join('') : `<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستظهر رحلاتك هنا.')}</div>`}`,
   'r-saved': () => `${hdr('العناوين المحفوظة', false)}<div class="card">${empty('pin', 'لا توجد عناوين محفوظة', 'أضف عنوان البيت أو العمل لتطلب أسرع.')}</div>
     <form data-form="addr" class="card" novalidate><h3>إضافة عنوان</h3>${fld('اسم العنوان (مثل: البيت)', 'label', 'text', 'required')}${fld('العنوان', 'address', 'text', 'required')}<button class="btn" type="submit">حفظ العنوان</button></form>`,
-  'r-prof': () => `${hdr('الملف الشخصي', false)}${routes.profile().replace(/^[\s\S]*?<\/header>/, '')}<div class="card" style="padding:6px 14px">${menu('help', 'المساعدة والشكاوى', 'help')}<button class="menu" data-go="home"><span class="l">${ic('swap')}تغيير نوع المستخدم</span>${ic('chev')}</button></div>`,
   help: () => `${hdr('المساعدة والشكاوى')}<form data-form="help" class="card" novalidate><h3>أرسل شكوى أو استفسارًا</h3>
     <label class="f"><span>نوع الرسالة</span><select name="type" required><option value="">اختر</option><option>شكوى</option><option>استفسار</option><option>مشكلة في رحلة</option><option>مشكلة في الحساب</option></select></label>
     <label class="f"><span>التفاصيل</span><textarea name="msg" rows="4" required></textarea></label><button class="btn" type="submit">إرسال</button></form>`
@@ -339,6 +428,7 @@ const stack = []; let cur = 'home';
 
 function riderOpen() { return CONFIG.riderEnabled === true; }
 function go(name, replace) {
+  if (name === 'home') name = landing();
   if (/^d-reg[123]$/.test(name) && !S.user) { toast('سجّل الدخول أو أنشئ حسابًا أولًا', true); name = 'login'; }
   if (/^d-reg[123]$/.test(name) && S.reg.submitted) { toast(S.drv.approved ? 'حسابك معتمد، لتعديل بياناتك تواصل مع الإدارة' : 'طلبك قيد المراجعة بالفعل', true); name = 'd-home'; }
   if (name.startsWith('r-') && !riderOpen()) name = 'r-gate';
@@ -347,7 +437,7 @@ function go(name, replace) {
   cur = name; render();
 }
 function back() { if (stack.length) { try { history.back(); return; } catch (e) {} } popTo(); }
-function popTo() { cur = stack.pop() || 'home'; if (cur.startsWith('r-') && !riderOpen()) cur = 'home'; render(); }
+function popTo() { cur = stack.pop() || 'home'; if (cur === 'home') cur = landing(); if (cur.startsWith('r-') && !riderOpen()) cur = 'home'; render(); }
 window.addEventListener('popstate', popTo);
 function render() {
   const v = $('#view');
@@ -387,22 +477,23 @@ const forms = {
   signup(f) {
     const d = fd(f);
     if (d.name.trim().length < 3) return fail('اكتب اسمك الكامل', f.name);
+    if (!phoneOk(d.phone || '')) return fail('رقم الهاتف غير صحيح (مثال 01012345678)', f.phone);
     if (!emailOk(d.email)) return fail('البريد الإلكتروني غير صحيح', f.email);
     if (d.pw.length < 8) return fail('كلمة المرور يجب ألا تقل عن 8 أحرف', f.pw);
     if (d.pw !== d.pw2) return fail('كلمتا المرور غير متطابقتين', f.pw2);
     if (!f.terms.checked) return fail('يجب الموافقة على الشروط وسياسة الخصوصية');
     send(async () => {
-  const r = await API.signUp({ name: d.name, email: d.email, password: d.pw });
+  const r = await API.signUp({ name: d.name, email: d.email, password: d.pw, phone: d.phone });
   S.reg.name = d.name.trim();
   S.reg.email = d.email.trim();
-  if (r && r.session) { go('home', true); toast('أهلًا بك في سِكّة'); } else { S.user = null; go('verify'); toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني'); }
+  if (r && r.session) { go('wait', true); toast('أهلًا بك في سِكّة'); } else { S.user = null; go('verify'); toast('تم إرسال رابط التأكيد إلى بريدك الإلكتروني'); }
 });
   },
   login(f) {
     const d = fd(f);
     if (!emailOk(d.email)) return fail('البريد الإلكتروني غير صحيح', f.email);
     if (!d.pw) return fail('اكتب كلمة المرور', f.pw);
-    send(async () => { const u = await API.signIn({ email: d.email, password: d.pw }); S.user = mapUser(u); S.drv.account = 'نشط'; drvLoaded = false; go('home', true); afterAuth(); toast('أهلًا بك في سِكّة'); });
+    send(async () => { const u = await API.signIn({ email: d.email, password: d.pw }); S.user = mapUser(u); S.drv.account = 'نشط'; drvLoaded = false; go('wait', true); afterAuth(); toast('أهلًا بك في سِكّة'); });
   },
   forgot(f) {
     const d = fd(f);
@@ -440,6 +531,25 @@ const forms = {
     if (miss) return fail('ارفع جميع المستندات المطلوبة');
     const docs = ins.map(i => ({ label: i.closest('.f').querySelector('span').textContent, file: i.files[0] }));
     send(async () => { await API.registerDriver(S.reg, { photo: S.photoFile, docs }); S.reg.submitted = true; S.drv.approval = 'قيد المراجعة'; S.drv.vehicle = 'قيد المراجعة'; S.drv.approved = false; S.drv.vehApproved = false; toast('تم إرسال طلبك للمراجعة'); go('d-home', true); });
+  },
+  complete(f) {
+    const d = fd(f); if (!phoneOk(d.phone)) return fail('رقم الهاتف غير صحيح (مثال 01012345678)', f.phone);
+    send(async () => { await API.rpc('update_profile', { p_name: '', p_phone: d.phone.replace(/\s/g, ''), p_avatar: null }); await loadMe(); });
+  },
+  editp(f) {
+    const d = fd(f), nm = d.name.trim();
+    if (nm.length < 2) return fail('الاسم يجب أن يكون حرفين على الأقل', f.name);
+    if (!phoneOk(d.phone)) return fail('رقم الهاتف غير صحيح', f.phone);
+    send(async () => {
+      let path = null;
+      if (S.newAvatar) { const uid = await API.uid(), b = await resizeImg(S.newAvatar, 320, 0.82); path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`; const { error } = await db.storage.from('avatars').upload(path, b, { contentType: 'image/jpeg' }); if (error) throw error; }
+      await API.rpc('update_profile', { p_name: nm, p_phone: d.phone.replace(/\s/g, ''), p_avatar: path });
+      S.newAvatar = null; await loadMe(); toast('تم حفظ التغييرات'); back();
+    });
+  },
+  chat(f) {
+    const m = f.m.value.trim(), r = chatRide(); if (!m || !r) return; f.m.value = '';
+    API.rpc('send_message', { p_ride: r.id, p_body: m }).then(() => pullChat()).catch(e => { toast(errMsg(e), true); f.m.value = m; });
   },
   rpick(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.plat = c.lat; S.ride.plng = c.lng; S.ride.pick = fd(f).pick.trim() || 'موقع محدد على الخريطة'; back(); },
   rdest(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.dlat = c.lat; S.ride.dlng = c.lng; S.ride.dest = fd(f).dest.trim() || 'موقع محدد على الخريطة'; back(); },
@@ -483,6 +593,12 @@ const acts = {
     if (driverGate()) return toast('لا يمكن تفعيل استقبال الرحلات قبل اعتماد حسابك ومركبتك', true);
     send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; if (!S.drv.online) S.reqs = []; render(); pollCtl(); });
   },
+  pickrole(el) { send(async () => { await API.rpc('set_role', { p_role: el.dataset.v }); await loadMe(); }); },
+  retry() { send(async () => { await loadMe(); }); },
+  theme() { const nx = { auto: 'light', light: 'dark', dark: 'auto' }[themeMode()]; try { localStorage.setItem(THEME_KEY, nx); } catch (e) {} applyTheme(nx); render(); },
+  async push() { try { if (S.push === 'on') { await disablePush(); toast('تم إيقاف إشعارات الهاتف'); } else { await enablePush(); toast('تم تفعيل إشعارات الهاتف'); } } catch (e) { toast(pushMsg(e), true); } pushRefresh(); },
+  async pushyes() { acts.close(); try { await enablePush(); toast('تم تفعيل الإشعارات'); } catch (e) { toast(pushMsg(e), true); } },
+  nopen(el) { openTarget({ url: el.dataset.v }); },
   rveh(el) { S.ride.veh = el.dataset.v; go('r-price'); },
   rnext() { if (!S.ride.plat || !S.ride.dlat) return toast('حدّد موقع الانطلاق والوجهة أولًا', true); go('r-veh'); },
   gps() { if (!navigator.geolocation || !S.map) return toast('تحديد الموقع غير متاح', true); navigator.geolocation.getCurrentPosition(p => S.map && S.map.setView([p.coords.latitude, p.coords.longitude], 17), () => toast('اسمح للتطبيق بالوصول لموقعك', true), { enableHighAccuracy: true, timeout: 10000 }); },
@@ -501,6 +617,11 @@ document.addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g) return go(g.dataset.go);
   if (e.target.closest('[data-back]')) back();
   if (e.target.id === 'sheet') acts.close();
+});
+document.addEventListener('change', e => {
+  const i = e.target; if (i.name !== 'avatar' || !i.files || !i.files[0]) return;
+  const f = i.files[0]; if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('اختر صورة JPG أو PNG', true);
+  S.newAvatar = f; $('#avprev').innerHTML = `<img class="av big" src="${URL.createObjectURL(f)}" alt="">`;
 });
 document.addEventListener('submit', e => {
   const f = e.target.closest('[data-form]'); if (!f) return;
@@ -522,7 +643,7 @@ const RECOVERY = /type=recovery/.test(location.hash);
 let resolveReady; const READY = new Promise(r => { resolveReady = r; });
 function resetSession() {
   if (S.avatar) { try { URL.revokeObjectURL(S.avatar); } catch (e) {} }
-  S.user = null; S.reg = {}; S.photoFile = null; S.prof = null; S.hasDriver = false; S.avatar = null; S.rd = null; S.dr = null; S.reqs = []; S.hist = undefined; S.dstat = undefined; stopPoll(); drvLoaded = false; drvPromise = null;
+  S.user = null; S.reg = {}; S.photoFile = null; S.prof = null; S.hasDriver = false; S.avatar = null; S.me = null; S.notifs = { unread: 0, items: [] }; nLast = null; chatLast = 0; S.newAvatar = null; S.rd = null; S.dr = null; S.reqs = []; S.hist = undefined; S.dstat = undefined; stopPoll(); drvLoaded = false; drvPromise = null;
   S.drv = { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false };
   stack.length = 0; go('home', true);
 }
@@ -554,7 +675,11 @@ function initMap(kind) {
   S.map = L.map(el).setView(lat ? [lat, lng] : [S.cfg.lat || 31.4042, S.cfg.lng || 30.417], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.map);
 }
-const _r0 = render; render = function () { if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
+ENTER.chat = () => { chatLast = 0; pullChat(true); clearInterval(chatT); chatT = setInterval(pullChat, 2500); };
+ENTER.notif = async () => { try { S.notifs = await API.rpc('my_notifications', { p_limit: 40 }); if (cur === 'notif') redraw(); await API.rpc('read_notifications'); S.notifs.unread = 0; document.querySelectorAll('.nb').forEach(b => { b.hidden = true; }); } catch (e) {} };
+ENTER['d-notif'] = ENTER['r-notif'] = ENTER.notif;
+ENTER.account = ENTER['d-me'] = ENTER['r-prof'] = ENTER.profile = () => pushRefresh();
+const _r0 = render; render = function () { if (cur !== 'chat') { clearInterval(chatT); chatT = null; } if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
 let pollT = null, lastSig = '';
 function stopPoll() { clearInterval(pollT); pollT = null; lastSig = ''; }
 async function loadCfg() { try { S.cfg = await API.rpc('app_config'); CONFIG.riderEnabled = S.cfg.rider_enabled === true; if (cur === 'r-gate' && riderOpen()) go('r-home', true); } catch (e) { console.error('cfg', e); } }
@@ -580,21 +705,95 @@ async function syncDriver() {
     if (cur === 'd-req') render();
   }
 }
-function pollCtl() {
-  stopPoll(); if (!S.user) return;
-  pollT = setInterval(async () => { try { if (S.rd || ['r-search', 'r-live', 'r-end'].includes(cur)) await syncRider(); if (S.drv.online || S.dr) await syncDriver(); } catch (e) { console.error('poll', e); } }, 3500);
-}
 async function startSession() {
   await loadCfg(); pollCtl();
   try {
     if (riderOpen()) await syncRider();
     if (S.hasDriver && S.drv.online) { const r = await API.rpc('driver_ride'); if (r) { S.dr = r; go('d-cur', true); } }
   } catch (e) { console.error('session', e); }
+  offerPush(); pushRefresh();
+  const g = new URLSearchParams(location.search).get('go'); if (g) { try { history.replaceState(null, '', location.pathname); } catch (e) {} openTarget({ url: g }); }
 }
+function landing() {
+  if (!S.user) return 'welcome';
+  if (!S.me) return 'wait';
+  if (!S.me.phone) return 'complete';
+  if (!S.me.role) return 'rolepick';
+  return S.me.role === 'driver' ? 'd-home' : 'r-home';
+}
+async function loadMe() {
+  try { S.me = await API.rpc('my_profile'); S.meErr = false; } catch (e) { console.error('me', e); S.meErr = true; }
+  if (['home', 'welcome', 'login', 'signup', 'verify', 'forgot', 'wait', 'complete', 'rolepick'].includes(cur)) go(landing(), true);
+}
+const chatRide = () => S.me && S.me.role === 'driver' ? S.dr : S.rd;
+let chatT = null, chatLast = 0;
+async function pullChat(first) {
+  const r = chatRide(); if (!r || cur !== 'chat') return;
+  try { const ms = await API.rpc('get_messages', { p_ride: r.id, p_after: chatLast }); if (ms.length) { chatLast = ms[ms.length - 1].id; paintMsgs(ms, first); } else if (first) paintMsgs([], true); } catch (e) { console.error(e); }
+}
+function paintMsgs(ms, first) {
+  const c = $('#cmsgs'); if (!c) return;
+  if (!ms.length && !c.children.length) c.innerHTML = '<p class="note c" style="margin:auto">ابدأ المحادثة، وهتوصله رسالتك فورًا.</p>';
+  if (ms.length) { const n = c.querySelector('.note'); if (n) n.remove(); }
+  ms.forEach(m => c.insertAdjacentHTML('beforeend', `<div class="msg ${m.mine ? 'me' : ''}"><span>${esc(m.body)}</span><small>${new Date(m.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</small></div>`));
+  c.scrollTop = c.scrollHeight; if (!first && ms.some(m => !m.mine)) beep(660, 0.1, 1);
+}
+const NI = { ride_request: 'car', ride: 'route', chat: 'chat', account: 'user' };
+let nLast = null;
+async function syncNotifs() {
+  const n = await API.rpc('my_notifications', { p_limit: 15 }); S.notifs = n;
+  const top = n.items.length ? n.items[0].id : 0;
+  if (nLast === null) nLast = top;
+  else if (top > nLast) { n.items.filter(x => x.id > nLast && !x.read && x.kind !== 'ride_request').reverse().forEach(banner); nLast = top; }
+  document.querySelectorAll('.nb').forEach(b => { b.hidden = !n.unread; b.textContent = n.unread > 9 ? '9+' : n.unread; });
+}
+function banner(x) {
+  let b = $('#nbanner'); if (!b) { b = document.createElement('button'); b.id = 'nbanner'; b.className = 'nbanner'; document.body.appendChild(b); }
+  b.innerHTML = `<span class="ni">${ic(NI[x.kind] || 'bell')}</span><span class="fx"><b>${esc(x.title)}</b><small>${esc(x.body)}</small></span>`;
+  b.dataset.u = (x.data && x.data.url) || ''; b.classList.add('on'); beep(740, 0.12, 2);
+  try { navigator.vibrate && navigator.vibrate(120); } catch (e) {}
+  clearTimeout(banner.t); banner.t = setTimeout(() => b.classList.remove('on'), 4500);
+}
+document.addEventListener('click', e => { const b = e.target.closest('#nbanner'); if (b) { b.classList.remove('on'); openTarget({ url: b.dataset.u }); } });
+function openTarget(d) { const u = d && d.url; if (['chat', 'r-live', 'r-end', 'd-req', 'd-home', 'd-cur', 'notif'].includes(u)) go(u); }
+const b64u = t => { const r = atob((t + '='.repeat((4 - t.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+async function pushState() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return /iphone|ipad/i.test(navigator.userAgent) ? 'ios' : 'unsupported';
+  if (!S.cfg.vapid) return 'noconfig'; if (Notification.permission === 'denied') return 'denied';
+  try { const reg = await navigator.serviceWorker.ready; return (await reg.pushManager.getSubscription()) && Notification.permission === 'granted' ? 'on' : 'off'; } catch (e) { return 'off'; }
+}
+const PLBL = { on: 'مفعّلة', off: 'غير مفعّلة', denied: 'محظورة من المتصفح', unsupported: 'غير مدعومة', ios: 'ثبّت التطبيق أولًا', noconfig: 'غير متاحة حاليًا' };
+async function pushRefresh() { S.push = await pushState(); const e = $('#pushs'); if (e) e.textContent = PLBL[S.push] || ''; }
+async function enablePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw 'unsupported';
+  if (!S.cfg.vapid) throw 'noconfig';
+  if ((await Notification.requestPermission()) !== 'granted') throw 'denied';
+  const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(S.cfg.vapid) });
+  const j = sub.toJSON(); await API.rpc('save_push_sub', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+}
+async function disablePush() { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (sub) { const ep = sub.endpoint; await sub.unsubscribe(); await API.rpc('drop_push_sub', { p_endpoint: ep }); } }
+const pushMsg = e => ({ denied: 'تم رفض الإذن، فعّله من إعدادات المتصفح', unsupported: 'جهازك لا يدعم الإشعارات', noconfig: 'الإشعارات لم تُفعَّل من الإدارة بعد' }[e] || errMsg(e));
+async function offerPush() {
+  try {
+    if (!S.cfg.vapid || !('Notification' in window) || !('PushManager' in window)) return;
+    if (Notification.permission === 'granted') { enablePush().catch(() => {}); return; }
+    if (Notification.permission !== 'default' || localStorage.getItem('sekka_push_asked')) return;
+    localStorage.setItem('sekka_push_asked', '1');
+    setTimeout(() => { const s = $('#sheet'); s.innerHTML = `<div><h3>فعّل الإشعارات</h3><p>لتصلك ${S.me && S.me.role === 'driver' ? 'الطلبات الجديدة' : 'تحديثات رحلتك ورسائل السائق'} حتى لو التطبيق مقفول.</p><button class="btn" data-act="pushyes">تفعيل الإشعارات</button><button class="btn sec" data-act="close">لاحقًا</button></div>`; s.hidden = false; }, 1500);
+  } catch (e) {}
+}
+let polling = false;
+async function runPoll() {
+  if (polling) return; polling = true;
+  try { if (S.rd || ['r-search', 'r-live', 'r-end'].includes(cur)) await syncRider(); if (S.drv.online || S.dr) await syncDriver(); await syncNotifs(); } catch (e) { console.error('poll', e); } finally { polling = false; }
+}
+function pollCtl() { stopPoll(); if (!S.user) return; pollT = setInterval(runPoll, 3500); runPoll(); }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user && pollT) runPoll(); });
 function afterAuth() {
   if (drvLoaded) return drvPromise;
   drvLoaded = true;
-  drvPromise = new Promise(r => setTimeout(r, 0)).then(loadDriver).then(startSession);
+  drvPromise = new Promise(r => setTimeout(r, 0)).then(loadMe).then(loadDriver).then(startSession);
   return drvPromise;
 }
 function boot() {
@@ -612,7 +811,7 @@ function boot() {
     if (event === 'PASSWORD_RECOVERY') { go('newpw', true); return; }
     if (session && session.user) {
       S.user = mapUser(session.user); S.drv.account = 'نشط';
-      if (event === 'SIGNED_IN' && ['login', 'signup', 'verify', 'forgot'].includes(cur)) go('home', true);
+      if (event === 'SIGNED_IN' && ['login', 'signup', 'verify', 'forgot', 'welcome'].includes(cur)) go('wait', true);
       afterAuth();
     } else if (event === 'SIGNED_OUT' && S.user) { resetSession(); }
   });
@@ -624,6 +823,7 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open') openTarget(e.data.data); });
   window.addEventListener('load', () => { navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(e => console.error('SEKKA PWA registration failed:', e)); });
 }
 })();
