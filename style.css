@@ -128,25 +128,84 @@ button{cursor:pointer;border:0;background:none}
 @media(min-width:700px){.shell{margin-block:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* Profile */
-.phero{background:linear-gradient(135deg,var(--g1),#0b6b52);color:#fff;border-radius:var(--r);padding:22px 16px;margin-top:8px;text-align:center;box-shadow:var(--sh)}
-.phero .avatar{width:96px;height:96px;margin:0 auto 10px;border-color:rgba(255,255,255,.9)}
-.phero h2{font-size:1.25rem;font-weight:800}
-.phero p{opacity:.85;font-size:.9rem;margin-bottom:8px;word-break:break-all}
-.kv h3{margin-bottom:4px}
-.kv .row>span{color:var(--mut);font-size:.9rem}
-.kv .row>b{font-size:.95rem;text-align:left}
 
-/* Motion */
-.rise{animation:rise .45s cubic-bezier(.2,.8,.2,1) both}.rise:nth-child(2){animation-delay:.06s}.rise:nth-child(3){animation-delay:.12s}.rise:nth-child(4){animation-delay:.18s}
-@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.radar{position:relative;width:96px;height:96px;margin:6px auto 14px}.radar i{position:absolute;inset:0;border-radius:50%;border:3px solid #10b981;opacity:0;animation:rad 2.4s ease-out infinite}.radar i:nth-child(2){animation-delay:.8s}.radar i:nth-child(3){animation-delay:1.6s}
-@keyframes rad{0%{transform:scale(.3);opacity:.9}100%{transform:scale(1.15);opacity:0}}
-.btn{transition:transform .12s ease,box-shadow .2s ease}.btn:active{transform:scale(.97)}
-@media (prefers-reduced-motion:reduce){.rise,.radar i{animation:none}}
+/* ===== زر تبديل المظهر — إضافة سِكّة ===== */
+.theme-toggle{
+  position:absolute;top:12px;right:14px;z-index:20;
+  width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;
+  color:var(--g1);background:var(--w);
+  border:1px solid var(--ln);box-shadow:var(--sh);
+  transition:transform .2s ease,background .2s ease,color .2s ease;
+}
+.theme-toggle:active{transform:scale(.94)}
+.theme-toggle svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-/* Map picker */
-.pmap{position:relative;height:340px;border-radius:20px;overflow:hidden;margin-bottom:10px;background:#dcebe3;z-index:0}
-.ppin{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-34px 0 0 -13px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#064e3b;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:500;pointer-events:none}
-.ppin::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#10b981}
-.gps{position:absolute;bottom:12px;left:12px;z-index:500}
+/* ===== ألوان الوضع الداكن ===== */
+html.dk{
+  color-scheme:dark;
+  --g1:#10b981;
+  --g2:#34d399;
+  --w:#17251f;
+  --bg:#0b1713;
+  --tx:#e7f2ec;
+  --mut:#a1b8ac;
+  --ln:#294238;
+  --err:#f87171;
+  --warn:#fbbf24;
+  --sh:0 6px 20px rgba(0,0,0,.22);
+}
+html.dk body{background:#07110d;color:var(--tx)}
+html.dk .shell{background:var(--bg);box-shadow:0 0 40px rgba(0,0,0,.35)}
+html.dk .hdr{background:var(--bg)}
+html.dk .hdr h1,
+html.dk .brand h2,
+html.dk .role b,
+html.dk .card h3,
+html.dk .sheet h3,
+html.dk .menu .l .ic,
+html.dk .link{color:var(--g2)}
+html.dk .ib,
+html.dk .theme-toggle{background:#17251f;color:#a7f3d0;border:1px solid var(--ln)}
+html.dk .role,
+html.dk .card,
+html.dk .stat,
+html.dk .sheet>div,
+html.dk .tabs{background:#17251f}
+html.dk .role .big{background:#075b43}
+html.dk .btn.sec{background:#17251f;color:#a7f3d0;border-color:#168765}
+html.dk .btn.lite,
+html.dk .tabs button.on,
+html.dk .ch input:checked+.chb{background:#123d30;color:#a7f3d0}
+html.dk .f input,
+html.dk .f select,
+html.dk .f textarea,
+html.dk .up,
+html.dk .chb,
+html.dk .pin b{background:#111f19;color:var(--tx);border-color:var(--ln)}
+html.dk .up.has{background:#123d30}
+html.dk .avatar{background:#123d30;color:#a7f3d0;border-color:#294238}
+html.dk .map{background-color:#14251d}
+html.dk .pill.ok{background:#123d30;color:#a7f3d0}
+html.dk .pill.wait{background:#493817;color:#fcd34d}
+html.dk .pill.off{background:#26362e;color:#b7c8bf}
+html.dk .row,
+html.dk .menu,
+html.dk .tabs{border-color:var(--ln)}
+html.dk .tabs button{color:var(--mut)}
+html.dk .loader{background:rgba(7,17,13,.72)}
+html.dk .loader span{border-color:#123d30;border-top-color:var(--g2)}
+html.dk .sheet{background:rgba(0,0,0,.68)}
+html.dk .map p{color:#b4c8bd}
+html.dk .stars button{color:#66776d}
+html.dk .stars button.on{color:#f5b301}
+html.dk .switch{background:#40534a}
+html.dk .note,
+html.dk .empty,
+html.dk .role span,
+html.dk .stat small{color:var(--mut)}
+html.dk .empty b{color:var(--tx)}
+html.dk ::placeholder{color:#82988c;opacity:1}
+html.dk input,
+html.dk select,
+html.dk textarea{accent-color:var(--g2)}
