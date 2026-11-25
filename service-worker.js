@@ -1,4 +1,4 @@
-const CACHE_NAME = "sekka-pwa-v5";
+const CACHE_NAME = "sekka-pwa-v6";
 const SB_CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
 const APP_SHELL = ["./", "./index.html", "./style.css", "./script.js", "./pwa-install.css", "./pwa-install.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-maskable-192.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 
@@ -39,6 +39,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
+  if (url.pathname.endsWith("/admin.html")) return;
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
