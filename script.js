@@ -37,6 +37,16 @@ function errMsg(e) {
   if (m === 'type' || m === 'img') return 'نوع الملف غير مدعوم، ارفع صورة أو PDF';
   if (m.includes('failed to fetch') || m.includes('network')) return 'تعذّر الاتصال بالإنترنت';
   if (m.includes('row-level security') || m.includes('locked') || m.includes('permission')) return 'غير مسموح بهذا الإجراء حاليًا';
+  if (m.includes('price_changed')) return 'تغيّر السعر، راجع السعر الجديد ثم أكّد';
+  if (m.includes('out of area')) return 'الموقع خارج نطاق الخدمة';
+  if (m.includes('too short')) return 'المسافة قصيرة جدًا';
+  if (m.includes('too long')) return 'المسافة أطول من الحد المسموح';
+  if (m.includes('bad location')) return 'حدّد الموقع على الخريطة أولًا';
+  if (m.includes('duplicate key')) return 'عندك رحلة جارية بالفعل';
+  if (m.includes('rider disabled')) return 'خدمة الركاب غير متاحة حاليًا';
+  if (m === 'taken') return 'الطلب اتقبل من سائق تاني';
+  if (m.includes('not allowed')) return 'غير مسموح بهذا الإجراء حاليًا';
+  if (m.includes('check constraint')) return 'راجع العناوين التي كتبتها';
   return 'حدث خطأ غير متوقع، حاول مرة أخرى.';
 }
 function prep(file) {
@@ -82,15 +92,17 @@ const API = {
   async setDriverOnline(v) { const uid = await this.uid(); const { error } = await db.from('driver_profiles').update({ is_online: !!v }).eq('user_id', uid); if (error) throw error; },
   submitComplaint(d) { return this._(d); },
   saveAddress(d) { return this._(d); },
-  requestRide(d) { return this._(d); },
-  rateDriver(d) { return this._(d); }
+  async rpc(fn, a) { need(); const { data, error } = await db.rpc(fn, a || {}); if (error) throw error; return data; },
+  requestRide(d) { return this.rpc('request_ride', { p_pickup: d.pick, p_dest: d.dest, p_veh: d.veh, p_plat: d.plat, p_plng: d.plng, p_dlat: d.dlat, p_dlng: d.dlng, p_expected: d.expected }); },
+  quote(d) { return this.rpc('quote_ride', { p_plat: d.plat, p_plng: d.plng, p_dlat: d.dlat, p_dlng: d.dlng, p_veh: d.veh }); },
+  rateDriver(d) { return this.rpc('rate_ride', { p_id: d.id, p_stars: d.stars, p_note: d.note || '' }); }
 };
 
 /* ===== الحالة ===== */
 const S = {
   user: null,
   reg: {},
-  ride: {},
+  ride: {}, rd: null, dr: null, reqs: [], cfg: { fares: {} },
   drv: { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false },
   stars: 0
 };
@@ -133,7 +145,7 @@ const val = n => esc(S.reg[n] || '');
 const fld = (label, name, type = 'text', extra = '') => `<label class="f"><span>${label}</span><input name="${name}" type="${type}" value="${val(name)}" ${extra}></label>`;
 const btn = (t, go, cls = '') => `<button class="btn ${cls}" data-go="${go}">${t}</button>`;
 const menu = (i, t, go) => `<button class="menu" data-go="${go}"><span class="l">${ic(i)}${t}</span>${ic('chev')}</button>`;
-const mapBox = (txt) => `<div class="map"><svg viewBox="0 0 300 220" preserveAspectRatio="none"><path d="M40 180 C90 150 100 90 150 100 S230 60 262 40" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 10"/><circle cx="40" cy="180" r="9" fill="#064e3b"/><circle cx="262" cy="40" r="9" fill="#10b981"/></svg><p>${txt || 'تظهر الخريطة هنا عند ربط خدمة الخرائط'}</p></div>`;
+const mapBox = (txt) => `<div class="map"><svg viewBox="0 0 300 220" preserveAspectRatio="none"><path d="M40 180 C90 150 100 90 150 100 S230 60 262 40" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 10"/><circle cx="40" cy="180" r="9" fill="#064e3b"/><circle cx="262" cy="40" r="9" fill="#10b981"/></svg><p>${txt || 'حدّد موقع الانطلاق والوجهة على الخريطة من الأسفل'}</p></div>`;
 const driverGate = () => !S.drv.approved || !S.drv.vehApproved;
 const logoImg = `<img src="${LOGO.icon}" alt="سِكّة">`;
 
@@ -149,6 +161,8 @@ const DOCS = {
 const VT = { tuktuk: 'توكتوك', taxi: 'تاكسي', car: 'سيارة' };
 
 /* ===== الصفحات ===== */
+const LOADING = '<div class="card" style="text-align:center"><div class="spin"></div><p class="note">جارٍ التحميل…</p></div>';
+const rideRow = x => `<div class="card rise"><div class="row"><span>${esc(x.pickup)} ← ${esc(x.dest)}</span><b>${esc(x.fare)} ج</b></div><div class="row"><small>${new Date(x.created).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</small>${pill(x.status === 'completed' ? 'مكتملة' : 'ملغاة', x.status === 'completed' ? 'ok' : 'off')}</div></div>`;
 const routes = {
   home: () => `
     <div class="brand">${logoImg}<h2>سِكّة — مشوارك أسهل</h2><p>منصة النقل المحلية في رشيد</p></div>
@@ -268,13 +282,16 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
       ${S.reg.submitted ? '' : btn('أكمل التسجيل كسائق', 'd-reg1')}</div>
     <div class="card" style="padding:6px 14px">${menu('route', 'الرحلة الحالية', 'd-cur')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('user', 'الملف الشخصي', 'profile')}</div>`,
 
-  'd-req': () => `${hdr('الطلبات الجديدة', false)}<div class="card">${empty('list', 'لا توجد طلبات جديدة', driverGate() ? 'تظهر الطلبات هنا بعد اعتماد حسابك ومركبتك وتفعيل الاتصال.' : 'فعّل الاتصال لتصلك الطلبات القريبة منك.')}</div>`,
-  'd-cur': () => `${hdr('الرحلة الحالية')}<div class="card">${empty('route', 'لا توجد رحلة جارية', 'ستظهر تفاصيل الرحلة هنا عند قبولك لطلب.')}</div>${btn('الطلبات الجديدة', 'd-req', 'sec')}`,
-  'd-trips': () => `${hdr('سجل الرحلات', false)}<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستجد هنا رحلاتك المكتملة بعد أول رحلة.')}</div>`,
-  'd-earn': () => `${hdr('الأرباح والعمولات', false)}
-    <div class="grid2"><div class="stat"><small>إجمالي الأرباح</small><b>—</b></div><div class="stat"><small>عمولة سِكّة</small><b>—</b></div></div>
-    <div class="card">${empty('wallet', 'لا توجد أرباح بعد', 'تُعرض الأرباح والعمولات هنا بعد إتمام الرحلات، وتُحدَّد نسبة العمولة من إدارة سِكّة.')}</div>`,
-  'd-rate': () => `${hdr('التقييمات')}<div class="card">${empty('star', 'لا توجد تقييمات بعد', 'تظهر تقييمات الركاب لك هنا بعد رحلاتك.')}</div>`,
+  'd-req': () => `${hdr('الطلبات الجديدة', false)}${!S.drv.online ? `<div class="card">${empty('list', 'فعّل الاتصال لتصلك الطلبات', 'من لوحة السائق فعّل استقبال الرحلات.')}</div>` : S.dr ? `<div class="card">${empty('route', 'عندك رحلة جارية', 'أنهِ رحلتك الحالية أولًا.')}</div>${btn('الرحلة الحالية', 'd-cur')}` : S.reqs.length ? S.reqs.map(r => `<div class="card rise"><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div><div class="row"><span>المسافة</span><b>${esc(r.km)} كم · ${esc(r.mins)} د</b></div><button class="btn" data-act="dacc" data-v="${esc(r.id)}">قبول الطلب</button></div>`).join('') : `<div class="card" style="text-align:center"><div class="radar"><i></i><i></i><i></i></div><b>في انتظار طلب جديد…</b><p class="note">يتم التحديث تلقائيًا</p></div>`}`,
+  'd-cur': () => {
+    const r = S.dr;
+    if (!r) return `${hdr('الرحلة الحالية')}<div class="card">${empty('route', 'لا توجد رحلة جارية', 'ستظهر تفاصيل الرحلة هنا عند قبولك لطلب.')}</div>${btn('الطلبات الجديدة', 'd-req', 'sec')}`;
+    const i = ['accepted', 'arrived', 'started'].indexOf(r.status);
+    return `${hdr('الرحلة الحالية', false)}<div class="prog">${[0, 1, 2].map(k => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div><div class="card rise"><div class="row"><span>الراكب</span><b>${esc(r.rider || 'راكب')}</b></div><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div><div class="row"><span>المسافة</span><b>${esc(r.km)} كم · ${esc(r.mins)} د</b></div></div>${(() => { const la = r.status === 'started' ? r.dlat : r.plat, ln = r.status === 'started' ? r.dlng : r.plng; return la ? `<a class="btn sec" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=${Number(la)},${Number(ln)}">فتح الملاحة</a>` : ''; })()}${r.status === 'accepted' ? '<button class="btn" data-act="dadv" data-v="arrived">وصلت لنقطة الالتقاء</button><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>' : r.status === 'arrived' ? `<form data-form="dpin" class="card" novalidate>${fld('رمز الرحلة من الراكب (٤ أرقام)', 'pin', 'text', 'required inputmode="numeric" maxlength="4" autocomplete="off"')}<button class="btn" type="submit">بدء الرحلة</button></form><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>` : '<button class="btn" data-act="dadv" data-v="completed">إنهاء الرحلة وتحصيل الأجرة</button>'}`;
+  },
+  'd-trips': () => `${hdr('سجل الرحلات', false)}${S.hist === undefined ? LOADING : S.hist.length ? S.hist.map(rideRow).join('') : `<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستجد هنا رحلاتك المكتملة بعد أول رحلة.')}</div>`}`,
+  'd-earn': () => `${hdr('الأرباح والعمولات', false)}${S.dstat === undefined ? LOADING : S.dstat ? `<div class="grid2"><div class="stat rise"><small>صافي الأرباح</small><b>${esc(S.dstat.gross - S.dstat.commission)} ج</b></div><div class="stat rise"><small>عمولة سِكّة</small><b>${esc(S.dstat.commission)} ج</b></div><div class="stat rise"><small>الرحلات المكتملة</small><b>${esc(S.dstat.trips)}</b></div><div class="stat rise"><small>تقييمك</small><b>${S.dstat.avg ? esc(S.dstat.avg) : '—'}</b></div></div>` : `<div class="card">${empty('wallet', 'لا توجد أرباح بعد', 'تظهر الأرباح هنا بعد إتمام الرحلات.')}</div>`}`,
+  'd-rate': () => { const L = (S.hist || []).filter(x => x.rating); return `${hdr('التقييمات')}${S.hist === undefined ? LOADING : L.length ? L.map(x => `<div class="card rise"><div class="row"><b>${'★'.repeat(x.rating)}${'☆'.repeat(5 - x.rating)}</b><small>${new Date(x.created).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</small></div>${x.note ? `<p>${esc(x.note)}</p>` : ''}</div>`).join('') : `<div class="card">${empty('star', 'لا توجد تقييمات بعد', 'تظهر تقييمات الركاب لك هنا بعد رحلاتك.')}</div>`}`; },
   'd-notif': () => `${hdr('الإشعارات')}<div class="card"><div class="row"><span class="l">${ic('bell')}<span>أكمل بيانات التسجيل ليتم اعتماد حسابك ومركبتك.</span></span></div></div>`,
   'd-me': () => `${hdr('حسابي', false)}${S.user ? `<div class="avatar">${(S.avatar || S.reg.photo) ? `<img src="${esc(S.avatar || S.reg.photo)}" alt="">` : ic('user')}</div><p class="welcome">${esc(S.user.name)}</p>` : ''}
     <div class="card" style="padding:6px 14px">${menu('user', 'الملف الشخصي', 'profile')}${S.reg.submitted ? '' : menu('steer', 'تسجيل بيانات السائق', 'd-reg1')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('help', 'المساعدة والشكاوى', 'help')}
@@ -286,19 +303,24 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   'r-start': () => routes['r-home'](),
   'r-home': () => `<div class="brand" style="padding:16px 0 4px;text-align:right">${logoImg.replace('<img', '<img style="width:48px;height:48px;border-radius:14px"')}<h2 style="font-size:1.2rem">إلى أين تريد الذهاب؟</h2></div>
     ${mapBox()}
-    <div class="card" style="padding:6px 14px">${menu('pin', S.ride.pick ? esc(S.ride.pick) : 'موقع الانطلاق', 'r-pick')}${menu('route', S.ride.dest ? esc(S.ride.dest) : 'الوجهة', 'r-dest')}</div>
-    ${btn('اختيار نوع المركبة', 'r-veh')}`,
-  'r-pick': () => `${hdr('موقع الانطلاق')}${mapBox('حدّد موقعك على الخريطة')}<form data-form="rpick" novalidate>${fld('عنوان الانطلاق', 'pick', 'text', 'required')}<button class="btn" type="submit">تأكيد الانطلاق</button></form>`,
-  'r-dest': () => `${hdr('تحديد الوجهة')}${mapBox('حدّد وجهتك على الخريطة')}<form data-form="rdest" novalidate>${fld('عنوان الوجهة', 'dest', 'text', 'required')}<button class="btn" type="submit">تأكيد الوجهة</button></form>`,
+    <div class="card" style="padding:6px 14px">${menu('pin', S.ride.plat ? esc(S.ride.pick) : 'موقع الانطلاق', 'r-pick')}${menu('route', S.ride.dlat ? esc(S.ride.dest) : 'الوجهة', 'r-dest')}</div>
+    <button class="btn" data-act="rnext">اختيار نوع المركبة</button>`,
+  'r-pick': () => `${hdr('موقع الانطلاق')}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rpick" novalidate>${fld('وصف المكان (اختياري)', 'pick', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
+  'r-dest': () => `${hdr('تحديد الوجهة')}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rdest" novalidate>${fld('وصف المكان (اختياري)', 'dest', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
   'r-veh': () => `${hdr('اختر نوع المركبة')}<div class="vgrid" style="grid-template-columns:1fr">${['tuktuk', 'taxi', 'car'].map(k => `<button class="role" style="margin:0" data-act="rveh" data-v="${k}"><span class="big">${ic(k === 'tuktuk' ? 'tuk' : k)}</span><span><b>${VT[k]}</b><span>اختر ${VT[k]} لمشوارك</span></span></button>`).join('')}</div>`,
-  'r-price': () => `${hdr('تأكيد الطلب')}<div class="card"><div class="row"><span>من</span><b>${esc(S.ride.pick || '—')}</b></div><div class="row"><span>إلى</span><b>${esc(S.ride.dest || '—')}</b></div><div class="row"><span>المركبة</span><b>${VT[S.ride.veh] || '—'}</b></div><div class="row"><span>السعر</span><b>يُحسب من الخادم</b></div></div><p class="note">يظهر السعر النهائي قبل التأكيد ولا يُعتمد سعر غير صادر من النظام.</p><button class="btn" data-act="rconfirm">تأكيد الطلب</button>`,
-  'r-search': () => `${hdr('جارٍ البحث عن سائق')}<div class="card" style="text-align:center"><div class="spin"></div><b>نبحث لك عن أقرب سائق</b><p class="note">يمكنك إلغاء الطلب في أي وقت.</p></div>${btn('عرض بيانات السائق', 'r-drv', 'lite')}${btn('إلغاء الطلب', 'r-home', 'sec')}`,
-  'r-drv': () => `${hdr('بيانات السائق والمركبة')}<div class="card"><div class="avatar">${ic('user')}</div><div class="row"><span>السائق</span><b>—</b></div><div class="row"><span>المركبة</span><b>—</b></div><div class="row"><span>رقم اللوحة</span><b>—</b></div><div class="row"><span>التقييم</span><b>—</b></div></div>${btn('متابعة الرحلة على الخريطة', 'r-live')}`,
-  'r-live': () => `${hdr('متابعة الرحلة')}${mapBox('يظهر موقع السائق مباشرة عند ربط خدمة التتبع')}<div class="card"><div class="row"><span>حالة الرحلة</span>${pill('بانتظار السائق', 'wait')}</div></div>${btn('تأكيد بدء الرحلة برمز PIN', 'r-pin')}`,
-  'r-pin': () => `${hdr('رمز بدء الرحلة')}<div class="card" style="text-align:center"><p>أعطِ هذا الرمز للسائق عند الركوب لتأكيد بدء الرحلة.</p><div class="pin"><b>•</b><b>•</b><b>•</b><b>•</b></div><p class="note">يصلك الرمز بعد قبول السائق للطلب.</p></div>${btn('إنهاء الرحلة', 'r-end')}`,
-  'r-end': () => `${hdr('انتهت الرحلة')}<div class="card">${empty('check', 'وصلت إلى وجهتك', 'نتمنى أن تكون رحلتك مريحة.')}</div>${btn('قيّم السائق', 'r-rate')}`,
-  'r-rate': () => `${hdr('تقييم السائق')}<form data-form="rate" class="card" novalidate><p style="text-align:center">كيف كانت رحلتك؟</p><div class="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-act="star" data-v="${n}" aria-label="${n} نجوم">${ic('star')}</button>`).join('')}</div><label class="f"><span>ملاحظات (اختياري)</span><textarea name="note" rows="3"></textarea></label><button class="btn" type="submit">إرسال التقييم</button></form>`,
-  'r-hist': () => `${hdr('سجل الرحلات', false)}<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستظهر رحلاتك هنا.')}</div>`,
+  'r-price': () => { const q = S.quote, row = (l, v) => `<div class="row"><span>${l}</span><b>${v}</b></div>`;
+    return `${hdr('تأكيد الطلب')}<div class="card rise">${row('من', esc(S.ride.pick || '—'))}${row('إلى', esc(S.ride.dest || '—'))}${row('المركبة', VT[S.ride.veh] || '—')}</div>${q === undefined ? LOADING : q && q.total ? `<div class="card rise">${row('المسافة التقريبية', esc(q.km) + ' كم')}${row('الزمن التقريبي', esc(q.min) + ' دقيقة')}${row('سعر البداية', esc(q.base) + ' ج')}${row(`المسافة (${esc(q.per_km)} ج للكيلو)`, esc(q.dist_fee) + ' ج')}${row(`الوقت (${esc(q.per_min)} ج للدقيقة)`, esc(q.time_fee) + ' ج')}${q.veh_mult != 1 ? row('معامل المركبة', '×' + esc(q.veh_mult)) : ''}${q.night_mult != 1 ? row('زيادة الليل', '×' + esc(q.night_mult)) : ''}${q.surge > 1 ? row('زيادة الطلب المرتفع', '×' + esc(q.surge)) : ''}<div class="row" style="font-size:1.15rem"><span>الإجمالي (كاش)</span><b>${esc(q.total)} ج</b></div></div><p class="note">السعر ثابت بعد التأكيد، وقد يُضاف رسم انتظار بعد الدقائق المجانية.</p><button class="btn" data-act="rconfirm">تأكيد الطلب</button>` : `<div class="card">${empty('route', 'تعذّر حساب السعر', S.quoteErr || 'حاول مرة أخرى')}</div>${btn('رجوع', 'r-home', 'sec')}`}`; },
+  'r-search': () => `${hdr('جارٍ البحث عن سائق', false)}<div class="card rise" style="text-align:center"><div class="radar"><i></i><i></i><i></i></div><b>نبحث لك عن أقرب سائق</b><p class="note">${esc(S.ride.pick || '')} ← ${esc(S.ride.dest || '')}</p></div><button class="btn sec" data-act="rcancel">إلغاء الطلب</button>`,
+  'r-drv': () => routes['r-live'](),
+  'r-pin': () => routes['r-live'](),
+  'r-live': () => {
+    const r = S.rd; if (!r) return routes['r-home']();
+    const d = r.driver || {}, st = { accepted: ['السائق في الطريق إليك', 'wait'], arrived: ['السائق وصل لنقطة الالتقاء', 'ok'], started: ['الرحلة جارية', 'ok'] }[r.status] || ['—', 'wait'];
+    return `${hdr('متابعة الرحلة', false)}${mapBox('الخريطة المباشرة تتوفر عند ربط خدمة الخرائط')}<div class="card rise"><div class="row"><span>الحالة</span>${pill(st[0], st[1])}</div><div class="row"><span>السائق</span><b>${esc(d.name || '—')}</b></div><div class="row"><span>المركبة</span><b>${esc(d.veh || '—')}</b></div><div class="row"><span>اللوحة</span><b>${esc(d.plate || '—')}</b></div><div class="row"><span>التقييم</span><b>${d.avg ? esc(d.avg) : 'جديد'}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div></div>${r.status !== 'started' ? `<div class="card rise" style="text-align:center"><p>أعطِ هذا الرمز للسائق عند الركوب</p><div class="pin">${String(r.pin || '').split('').map(c => `<b>${esc(c)}</b>`).join('')}</div></div><button class="btn sec" data-act="rcancel">إلغاء الرحلة</button>` : ''}`;
+  },
+  'r-end': () => `${hdr('انتهت الرحلة', false)}<div class="card rise">${empty('check', 'وصلت إلى وجهتك', `المبلغ المطلوب: ${S.rd ? esc(S.rd.fare) : ''} ج كاش للسائق`)}</div>${btn('قيّم السائق', 'r-rate')}<button class="btn sec" data-act="rskip">تخطي التقييم</button>`,
+  'r-rate': () => `${hdr('تقييم السائق')}<form data-form="rate" class="card rise" novalidate><p style="text-align:center">كيف كانت رحلتك؟</p><div class="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-act="star" data-v="${n}" aria-label="${n} نجوم">${ic('star')}</button>`).join('')}</div><label class="f"><span>ملاحظات (اختياري)</span><textarea name="note" rows="3" maxlength="300"></textarea></label><button class="btn" type="submit">إرسال التقييم</button></form>`,
+  'r-hist': () => `${hdr('سجل الرحلات', false)}${S.hist === undefined ? LOADING : S.hist.length ? S.hist.map(rideRow).join('') : `<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستظهر رحلاتك هنا.')}</div>`}`,
   'r-saved': () => `${hdr('العناوين المحفوظة', false)}<div class="card">${empty('pin', 'لا توجد عناوين محفوظة', 'أضف عنوان البيت أو العمل لتطلب أسرع.')}</div>
     <form data-form="addr" class="card" novalidate><h3>إضافة عنوان</h3>${fld('اسم العنوان (مثل: البيت)', 'label', 'text', 'required')}${fld('العنوان', 'address', 'text', 'required')}<button class="btn" type="submit">حفظ العنوان</button></form>`,
   'r-prof': () => `${hdr('الملف الشخصي', false)}${routes.profile().replace(/^[\s\S]*?<\/header>/, '')}<div class="card" style="padding:6px 14px">${menu('help', 'المساعدة والشكاوى', 'help')}<button class="menu" data-go="home"><span class="l">${ic('swap')}تغيير نوع المستخدم</span>${ic('chev')}</button></div>`,
@@ -419,11 +441,16 @@ const forms = {
     const docs = ins.map(i => ({ label: i.closest('.f').querySelector('span').textContent, file: i.files[0] }));
     send(async () => { await API.registerDriver(S.reg, { photo: S.photoFile, docs }); S.reg.submitted = true; S.drv.approval = 'قيد المراجعة'; S.drv.vehicle = 'قيد المراجعة'; S.drv.approved = false; S.drv.vehApproved = false; toast('تم إرسال طلبك للمراجعة'); go('d-home', true); });
   },
-  rpick(f) { const d = fd(f); if (d.pick.trim().length < 2) return fail('اكتب موقع الانطلاق', f.pick); S.ride.pick = d.pick; back(); },
-  rdest(f) { const d = fd(f); if (d.dest.trim().length < 2) return fail('اكتب الوجهة', f.dest); S.ride.dest = d.dest; back(); },
+  rpick(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.plat = c.lat; S.ride.plng = c.lng; S.ride.pick = fd(f).pick.trim() || 'موقع محدد على الخريطة'; back(); },
+  rdest(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.dlat = c.lat; S.ride.dlng = c.lng; S.ride.dest = fd(f).dest.trim() || 'موقع محدد على الخريطة'; back(); },
+  dpin(f) {
+    const d = fd(f), pin = d.pin.trim().replace(/[٠-٩]/g, c => '٠١٢٣٤٥٦٧٨٩'.indexOf(c));
+    if (!/^\d{4}$/.test(pin)) return fail('اكتب الرمز المكوّن من 4 أرقام', f.pin);
+    send(async () => { const r = await API.rpc('driver_advance', { p_id: S.dr.id, p_to: 'started', p_pin: pin }); if (r.error) return toast(r.error === 'locked' ? 'تم قفل الرمز، تواصل مع الإدارة' : 'الرمز غير صحيح', true); S.dr = r.ride; render(); });
+  },
   rate(f) {
     if (!S.stars) return fail('اختر عدد النجوم');
-    send(async () => { await API.rateDriver({ stars: S.stars, note: f.note.value }); toast('شكرًا لتقييمك'); go('r-home', true); });
+    send(async () => { await API.rateDriver({ id: S.rd.id, stars: S.stars, note: f.note.value }); S.rd = null; S.stars = 0; toast('شكرًا لتقييمك'); go('r-home', true); });
   },
   addr(f) {
     const d = fd(f); if (!d.label.trim() || !d.address.trim()) return fail('أكمل بيانات العنوان');
@@ -454,10 +481,17 @@ const acts = {
 },
   online() {
     if (driverGate()) return toast('لا يمكن تفعيل استقبال الرحلات قبل اعتماد حسابك ومركبتك', true);
-    send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; render(); });
+    send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; if (!S.drv.online) S.reqs = []; render(); pollCtl(); });
   },
   rveh(el) { S.ride.veh = el.dataset.v; go('r-price'); },
-  rconfirm() { send(async () => { await API.requestRide(S.ride); go('r-search'); }); },
+  rnext() { if (!S.ride.plat || !S.ride.dlat) return toast('حدّد موقع الانطلاق والوجهة أولًا', true); go('r-veh'); },
+  gps() { if (!navigator.geolocation || !S.map) return toast('تحديد الموقع غير متاح', true); navigator.geolocation.getCurrentPosition(p => S.map && S.map.setView([p.coords.latitude, p.coords.longitude], 17), () => toast('اسمح للتطبيق بالوصول لموقعك', true), { enableHighAccuracy: true, timeout: 10000 }); },
+  rconfirm() { if (!S.user) { toast('سجّل الدخول أولًا', true); return go('login'); } send(async () => { try { await API.requestRide({ ...S.ride, expected: S.quote && S.quote.total }); } catch (e) { if (String(e.message).includes('price_changed')) await ENTER['r-price'](); throw e; } await syncRider(); pollCtl(); }); },
+  rcancel() { if (!S.rd) return go('r-home', true); send(async () => { await API.rpc('cancel_ride', { p_id: S.rd.id }); S.rd = null; toast('تم إلغاء الطلب'); go('r-home', true); }); },
+  rskip() { send(async () => { await API.rateDriver({ id: S.rd.id, stars: 0 }); S.rd = null; go('r-home', true); }); },
+  dacc(el) { send(async () => { S.dr = await API.rpc('accept_ride', { p_id: el.dataset.v }); S.reqs = []; go('d-cur', true); }); },
+  dadv(el) { send(async () => { const r = await API.rpc('driver_advance', { p_id: S.dr.id, p_to: el.dataset.v }); if (el.dataset.v === 'completed') { S.dr = null; S.dstat = undefined; toast('تم إنهاء الرحلة'); go('d-home', true); } else { S.dr = r.ride; render(); } }); },
+  drel() { send(async () => { await API.rpc('driver_release', { p_id: S.dr.id }); S.dr = null; toast('تم تحريرك من الرحلة'); go('d-req', true); }); },
   star(el) { S.stars = +el.dataset.v; document.querySelectorAll('.stars button').forEach((b, i) => b.classList.toggle('on', i < S.stars)); }
 };
 
@@ -488,7 +522,7 @@ const RECOVERY = /type=recovery/.test(location.hash);
 let resolveReady; const READY = new Promise(r => { resolveReady = r; });
 function resetSession() {
   if (S.avatar) { try { URL.revokeObjectURL(S.avatar); } catch (e) {} }
-  S.user = null; S.reg = {}; S.photoFile = null; S.prof = null; S.hasDriver = false; S.avatar = null; drvLoaded = false; drvPromise = null;
+  S.user = null; S.reg = {}; S.photoFile = null; S.prof = null; S.hasDriver = false; S.avatar = null; S.rd = null; S.dr = null; S.reqs = []; S.hist = undefined; S.dstat = undefined; stopPoll(); drvLoaded = false; drvPromise = null;
   S.drv = { account: 'غير مسجّل الدخول', approval: 'لم يُقدَّم الطلب', vehicle: 'غير مسجّلة', approved: false, vehApproved: false, online: false };
   stack.length = 0; go('home', true);
 }
@@ -509,10 +543,58 @@ async function loadDriver() {
     }
   } catch (e) { console.error('loadDriver', e); }
 }
+const redraw = () => { try { $('#view').innerHTML = routes[cur](); } catch (e) { console.error(e); } };
+async function load(fn, a, k) { S[k] = undefined; try { S[k] = await API.rpc(fn, a); } catch (e) { S[k] = k === 'hist' ? [] : null; console.error(e); } if (ENTER[cur]) redraw(); }
+const ENTER = { 'r-price': async () => { S.quote = undefined; S.quoteErr = ''; try { S.quote = await API.quote(S.ride); } catch (e) { S.quote = null; S.quoteErr = errMsg(e); } if (cur === 'r-price') redraw(); }, 'r-pick': () => initMap('pick'), 'r-dest': () => initMap('dest'), 'r-hist': () => load('my_rides', { p_role: 'r' }, 'hist'), 'd-trips': () => load('my_rides', { p_role: 'd' }, 'hist'), 'd-rate': () => load('my_rides', { p_role: 'd' }, 'hist'), 'd-earn': () => load('driver_stats', {}, 'dstat') };
+function initMap(kind) {
+  const el = $('#pmap'); if (!el) return;
+  if (S.map) { try { S.map.remove(); } catch (e) {} S.map = null; }
+  if (typeof L === 'undefined') { el.insertAdjacentHTML('afterbegin', '<p class="note" style="padding:70px 16px;text-align:center">تعذّر تحميل الخريطة، تأكد من الاتصال بالإنترنت</p>'); return; }
+  const lat = S.ride[kind === 'pick' ? 'plat' : 'dlat'], lng = S.ride[kind === 'pick' ? 'plng' : 'dlng'];
+  S.map = L.map(el).setView(lat ? [lat, lng] : [S.cfg.lat || 31.4042, S.cfg.lng || 30.417], 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.map);
+}
+const _r0 = render; render = function () { if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
+let pollT = null, lastSig = '';
+function stopPoll() { clearInterval(pollT); pollT = null; lastSig = ''; }
+async function loadCfg() { try { S.cfg = await API.rpc('app_config'); CONFIG.riderEnabled = S.cfg.rider_enabled === true; if (cur === 'r-gate' && riderOpen()) go('r-home', true); } catch (e) { console.error('cfg', e); } }
+async function syncRider() {
+  const r = await API.rpc('my_ride'), sig = JSON.stringify(r); S.rd = r;
+  const want = !r ? null : r.status === 'requested' ? 'r-search' : r.status === 'completed' ? 'r-end' : 'r-live';
+  if (want && cur !== want && !(want === 'r-end' && cur === 'r-rate')) go(want, true);
+  else if (want && sig !== lastSig && cur === want) render();
+  else if (!r && ['r-search', 'r-live', 'r-end'].includes(cur)) { go('r-home', true); toast('انتهى الطلب'); }
+  lastSig = sig;
+}
+async function syncDriver() {
+  if (S.dr) {
+    const r = await API.rpc('driver_ride');
+    if (!r) { S.dr = null; toast('تم إلغاء الرحلة من الراكب', true); go('d-req', true); } else if (JSON.stringify(r) !== JSON.stringify(S.dr)) { S.dr = r; if (cur === 'd-cur') render(); }
+    return;
+  }
+  if (!S.drv.online) return;
+  const q = await API.rpc('open_requests');
+  if (JSON.stringify(q) !== JSON.stringify(S.reqs)) {
+    const more = q.length > S.reqs.length; S.reqs = q;
+    if (more) { toast('وصلك طلب جديد'); try { navigator.vibrate && navigator.vibrate(200); } catch (e) {} }
+    if (cur === 'd-req') render();
+  }
+}
+function pollCtl() {
+  stopPoll(); if (!S.user) return;
+  pollT = setInterval(async () => { try { if (S.rd || ['r-search', 'r-live', 'r-end'].includes(cur)) await syncRider(); if (S.drv.online || S.dr) await syncDriver(); } catch (e) { console.error('poll', e); } }, 3500);
+}
+async function startSession() {
+  await loadCfg(); pollCtl();
+  try {
+    if (riderOpen()) await syncRider();
+    if (S.hasDriver && S.drv.online) { const r = await API.rpc('driver_ride'); if (r) { S.dr = r; go('d-cur', true); } }
+  } catch (e) { console.error('session', e); }
+}
 function afterAuth() {
   if (drvLoaded) return drvPromise;
   drvLoaded = true;
-  drvPromise = new Promise(r => setTimeout(r, 0)).then(loadDriver);
+  drvPromise = new Promise(r => setTimeout(r, 0)).then(loadDriver).then(startSession);
   return drvPromise;
 }
 function boot() {
@@ -525,6 +607,7 @@ function boot() {
   Promise.all([new Promise(r => setTimeout(r, seen ? 0 : 2200)), Promise.race([READY, new Promise(r => setTimeout(r, 4500))])]).then(hideSplash);
   if (RECOVERY) go('newpw', true);
   if (!db) { toast('تعذّر تحميل خدمة الحساب، تأكد من الاتصال بالإنترنت', true); resolveReady(); return; }
+  loadCfg();
   db.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { go('newpw', true); return; }
     if (session && session.user) {
