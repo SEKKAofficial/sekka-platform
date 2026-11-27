@@ -255,7 +255,7 @@ const routes = {
     <form data-form="complete" novalidate class="rise">${fld('رقم الهاتف', 'phone', 'tel', 'required inputmode="tel" dir="ltr" maxlength="11" placeholder="01012345678"')}<button class="btn" type="submit">حفظ ومتابعة</button></form>
     <button class="btn sec" data-act="logout">تسجيل الخروج</button>`,
 
-  wait: () => `<div class="wt"><div class="wl-logo">${logoImg}</div>${S.meErr ? `<p>تعذّر تحميل بياناتك، تأكد من الاتصال</p><button class="btn" data-act="retry">إعادة المحاولة</button><button class="btn sec" data-act="logout">تسجيل الخروج</button>` : '<div class="spin"></div>'}</div>`,
+  wait: () => `<div class="wt"><div class="wl-logo">${logoImg}</div>${S.meErr ? `<p>${/function|PGRST202|schema cache|permission denied/i.test(S.meMsg || '') ? 'الخادم غير مُجهَّز بعد (شغّل v3_setup.sql في Supabase)' : 'تعذّر تحميل بياناتك، تأكد من الاتصال'}</p><p class="note" dir="ltr" style="max-width:300px;word-break:break-word">${esc(S.meMsg || '')}</p><button class="btn" data-act="retry">إعادة المحاولة</button><button class="btn sec" data-act="logout">تسجيل الخروج</button>` : '<div class="spin"></div>'}</div>`,
 
   account: () => {
     if (!S.user) return `${hdr('حسابي', false)}<div class="card">${empty('user', 'أنت غير مسجّل الدخول', 'سجّل الدخول للمتابعة')}${btn('تسجيل الدخول', 'login')}</div>`;
@@ -682,7 +682,7 @@ ENTER['d-cur'] = () => initLMap('driver');
 const _r0 = render; render = function () { if (cur !== 'd-home') killMap('dmap'); if (cur !== 'r-live' && cur !== 'd-cur') { killMap('lmap'); S.lcar = null; } if (cur !== 'chat') { clearInterval(chatT); chatT = null; } if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
 let pollT = null, lastSig = '';
 function stopPoll() { clearInterval(pollT); pollT = null; lastSig = ''; }
-async function loadCfg() { try { S.cfg = await API.rpc('app_config'); CONFIG.riderEnabled = S.cfg.rider_enabled === true; if (cur === 'r-gate' && riderOpen()) go('r-home', true); } catch (e) { console.error('cfg', e); } }
+async function loadCfg() { try { S.cfg = (await API.rpc('app_config')) || { fares: {} }; CONFIG.riderEnabled = S.cfg.rider_enabled === true; if (cur === 'r-gate' && riderOpen()) go('r-home', true); } catch (e) { console.error('cfg', e); } }
 async function syncRider() {
   const r = await API.rpc('my_ride'); let sig = 'null', dl = null; if (r) { const { dloc, ...rest } = r; dl = dloc; sig = JSON.stringify(rest); } S.rd = r;
   const want = !r ? null : r.status === 'requested' ? 'r-search' : r.status === 'completed' ? 'r-end' : 'r-live';
@@ -721,7 +721,7 @@ function landing() {
   return S.me.role === 'driver' ? 'd-home' : 'r-home';
 }
 async function loadMe() {
-  try { S.me = await API.rpc('my_profile'); S.meErr = false; } catch (e) { console.error('me', e); S.meErr = true; }
+  try { S.me = await API.rpc('my_profile'); S.meErr = false; S.meMsg = ''; } catch (e) { console.error('me', e); S.meErr = true; S.meMsg = String((e && (e.message || e.code)) || ''); }
   if (['home', 'welcome', 'login', 'signup', 'verify', 'forgot', 'wait', 'complete', 'rolepick'].includes(cur)) go(landing(), true);
 }
 const chatRide = () => S.me && S.me.role === 'driver' ? S.dr : S.rd;
