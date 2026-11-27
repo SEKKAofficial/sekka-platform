@@ -184,6 +184,15 @@ function resizeImg(file, max, q) {
     im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('IMG')); }; im.src = u;
   });
 }
+const contact = (ph, unread) => `<div class="row2">${phoneOk(ph || '') ? `<a class="btn sec" href="tel:${ph}">${ic('phone')} اتصال</a>` : ''}<button class="btn sec" data-go="chat">${ic('chat')} رسالة${unread ? `<i class="cb">${unread}</i>` : ''}</button></div>`;
+const msearch = () => `<form class="srch" data-form="msearch" novalidate><input name="q" placeholder="ابحث عن عنوان أو مكان في رشيد…" aria-label="بحث" autocomplete="off"><button aria-label="بحث">${ic('search')}</button></form><div id="sres" class="sres"></div>`;
+const statsHtml = () => { const t = S.dstat || {}; return `<div class="sq"><span>${ic('list')}</span><b>${t.today_trips != null ? esc(t.today_trips) : '—'}</b><small>رحلات اليوم</small></div><div class="sq"><span>${ic('wallet')}</span><b>${t.today_net != null ? esc(t.today_net) + ' ج' : '—'}</b><small>أرباح اليوم</small></div><div class="sq"><span>${ic('star')}</span><b>${t.avg ? esc(t.avg) : '—'}</b><small>التقييم</small></div>`; };
+const reqsHtml = () => {
+  if (S.dr) return `<div class="card rise"><div class="row"><b>عندك رحلة جارية</b></div>${btn('فتح الرحلة الحالية', 'd-cur')}</div>`;
+  if (!S.drv.online) return `<div class="card">${empty('car', 'أنت غير متصل', 'فعّل الاتصال من الخريطة لتصلك الطلبات.')}</div>`;
+  if (!S.reqs.length) return `<div class="card" style="text-align:center"><div class="radar"><i></i><i></i><i></i></div><b>في انتظار طلب جديد…</b><p class="note">هيظهرلك الطلب على الشاشة فور وصوله</p></div>`;
+  return `<h3 class="sec-t">الطلبات الجديدة</h3>${S.reqs.map(r => `<div class="card rq rise"><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>${esc(r.km)} كم · ${esc(r.mins)} د</span><b>${esc(r.fare)} ج كاش</b></div><button class="btn" data-act="dacc" data-v="${esc(r.id)}">قبول الطلب</button></div>`).join('')}`;
+};
 const driverGate = () => !S.drv.approved || !S.drv.vehApproved;
 const logoImg = `<img src="${LOGO.icon}" alt="سِكّة">`;
 
@@ -203,17 +212,7 @@ const LOADING = '<div class="card" style="text-align:center"><div class="spin"><
 const rideRow = x => `<div class="card rise"><div class="row"><span>${esc(x.pickup)} ← ${esc(x.dest)}</span><b>${esc(x.fare)} ج</b></div><div class="row"><small>${new Date(x.created).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</small>${pill(x.status === 'completed' ? 'مكتملة' : 'ملغاة', x.status === 'completed' ? 'ok' : 'off')}</div></div>`;
 const routes = {
   home: () => `
-    <div class="home-topbar" aria-label="أدوات الصفحة الرئيسية">
-      <div class="home-logo">${logoImg}</div>
-      <div class="home-tools">
-        <button class="home-tool-btn has-badge" type="button" data-go="notif" aria-label="الإشعارات" title="الإشعارات">
-          ${ic('bell')}<span class="nb" hidden></span>
-        </button>
-        <button class="home-tool-btn" type="button" data-act="theme" aria-label="تغيير المظهر" title="تغيير المظهر">${ic('moon')}</button>
-        <button class="home-tool-btn" type="button" data-go="help" aria-label="الدعم" title="الدعم">${ic('help')}</button>
-      </div>
-    </div>
-    <div class="brand home-brand"><h2>سِكّة — مشوارك أسهل</h2><p>منصة النقل المحلية في رشيد</p></div>
+    <div class="brand">${logoImg}<h2>سِكّة — مشوارك أسهل</h2><p>منصة النقل المحلية في رشيد</p></div>
     <p class="welcome">أهلًا بك في سِكّة، اختر كيف تريد المتابعة</p>
     <button class="role" data-go="r-start"><span class="big">${ic('user')}</span><span><b>أنا راكب</b><span>اطلب مشوارك بسهولة</span></span></button>
     <button class="role" data-go="d-start"><span class="big">${ic('steer')}</span><span><b>أنا سائق</b><span>انضم إلى فريق سائقين سِكّة</span></span></button>
@@ -362,28 +361,17 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
     </form>`;
   },
 
-  'd-home': () => `
-    <div class="brand" style="padding:16px 0 4px;text-align:right;display:flex;align-items:center;gap:12px">${logoImg.replace('<img', '<img style="width:48px;height:48px;border-radius:14px"')}<div><h2 style="margin:0;font-size:1.15rem">لوحة السائق</h2><p>سِكّة — مشوارك أسهل</p></div><button class="ib" style="margin-right:auto" data-go="d-notif" aria-label="الإشعارات">${ic('bell')}</button></div>
-    <div class="card"><div class="row"><span class="l">${ic('wallet').replace('wallet', '')}<b>استقبال الرحلات</b></span><button class="switch ${S.drv.online ? 'on' : ''}" data-act="online" role="switch" aria-checked="${S.drv.online}" aria-label="حالة الاتصال"></button></div>
-      ${driverGate() ? `<p class="note">${ic('lock').replace('class="ic"', 'class="ic" style="width:14px;height:14px;vertical-align:-2px"')} لا يمكن تفعيل استقبال الرحلات قبل اعتماد حسابك ومركبتك.</p>` : ''}</div>
-    <div class="grid2">
-      <div class="stat"><small>حالة الحساب</small>${pill(S.drv.account, S.user ? 'ok' : 'off')}</div>
-      <div class="stat"><small>اعتماد السائق</small>${pill(S.drv.approval, S.drv.approved ? 'ok' : 'wait')}</div>
-      <div class="stat"><small>حالة المركبة</small>${pill(S.drv.vehicle, S.drv.vehApproved ? 'ok' : 'wait')}</div>
-      <div class="stat"><small>حالة الاتصال</small>${pill(S.drv.online ? 'متصل' : 'غير متصل', S.drv.online ? 'ok' : 'off')}</div></div>
-    <div class="card"><h3>خطوات تفعيل حسابك</h3><ol class="steps">
-      <li><span class="dot ${S.user ? 'done' : ''}">${S.user ? '✓' : 1}</span>إنشاء حساب وتسجيل الدخول</li>
-      <li><span class="dot ${S.reg.submitted ? 'done' : ''}">${S.reg.submitted ? '✓' : 2}</span>إكمال بيانات السائق والمركبة والمستندات</li>
-      <li><span class="dot ${S.drv.approved ? 'done' : ''}">${S.drv.approved ? '✓' : 3}</span>مراجعة الإدارة واعتماد الحساب والمركبة</li></ol>
-      ${S.reg.submitted ? '' : btn('أكمل التسجيل كسائق', 'd-reg1')}</div>
-    <div class="card" style="padding:6px 14px">${menu('route', 'الرحلة الحالية', 'd-cur')}${menu('star', 'التقييمات', 'd-rate')}${menu('bell', 'الإشعارات', 'd-notif')}${menu('user', 'الملف الشخصي', 'profile')}</div>`,
-
+  'd-home': () => {
+    const m = S.me || {}, head = `<div class="dh rise"><button class="avbtn" data-go="d-me" aria-label="حسابي">${avatarEl(m.avatar, m.name)}</button><div class="fx"><small>مرحبًا</small><h2>${esc(m.name || '')}</h2></div><button class="ib bell" data-go="notif" aria-label="الإشعارات">${ic('bell')}<i class="nb" hidden></i></button></div>`;
+    if (driverGate()) return `${head}<div class="card rise"><h3>خطوات تفعيل حسابك</h3><ol class="steps"><li><span class="dot done">✓</span>إنشاء حساب وتسجيل الدخول</li><li><span class="dot ${S.reg.submitted ? 'done' : ''}">${S.reg.submitted ? '✓' : 2}</span>إكمال بيانات السائق والمركبة والمستندات</li><li><span class="dot ${S.drv.approved ? 'done' : ''}">${S.drv.approved ? '✓' : 3}</span>مراجعة واعتماد الإدارة</li></ol>${S.reg.submitted ? '' : btn('أكمل التسجيل كسائق', 'd-reg1')}</div><div class="grid2 rise"><div class="stat"><small>اعتماد السائق</small>${pill(S.drv.approval, S.drv.approved ? 'ok' : 'wait')}</div><div class="stat"><small>حالة المركبة</small>${pill(S.drv.vehicle, S.drv.vehApproved ? 'ok' : 'wait')}</div></div>`;
+    return `${head}<div class="tri rise" id="dstats">${statsHtml()}</div><div class="dmapw rise"><div id="dmap" dir="ltr"></div><div class="dstate" id="dstate"></div><button class="ib gps" data-act="dgps" aria-label="موقعي">${ic('pin')}</button></div><div id="dreqs"></div>`;
+  },
   'd-req': () => `${hdr('الطلبات الجديدة', false)}${!S.drv.online ? `<div class="card">${empty('list', 'فعّل الاتصال لتصلك الطلبات', 'من لوحة السائق فعّل استقبال الرحلات.')}</div>` : S.dr ? `<div class="card">${empty('route', 'عندك رحلة جارية', 'أنهِ رحلتك الحالية أولًا.')}</div>${btn('الرحلة الحالية', 'd-cur')}` : S.reqs.length ? S.reqs.map(r => `<div class="card rise"><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div><div class="row"><span>المسافة</span><b>${esc(r.km)} كم · ${esc(r.mins)} د</b></div><button class="btn" data-act="dacc" data-v="${esc(r.id)}">قبول الطلب</button></div>`).join('') : `<div class="card" style="text-align:center"><div class="radar"><i></i><i></i><i></i></div><b>في انتظار طلب جديد…</b><p class="note">يتم التحديث تلقائيًا</p></div>`}`,
   'd-cur': () => {
     const r = S.dr;
     if (!r) return `${hdr('الرحلة الحالية')}<div class="card">${empty('route', 'لا توجد رحلة جارية', 'ستظهر تفاصيل الرحلة هنا عند قبولك لطلب.')}</div>${btn('الطلبات الجديدة', 'd-req', 'sec')}`;
     const i = ['accepted', 'arrived', 'started'].indexOf(r.status);
-    return `${hdr('الرحلة الحالية', false)}<div class="prog">${[0, 1, 2].map(k => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div><div class="card rise"><div class="row"><span>الراكب</span><b>${esc(r.rider || 'راكب')}</b></div><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div><div class="row"><span>المسافة</span><b>${esc(r.km)} كم · ${esc(r.mins)} د</b></div></div>${(() => { const la = r.status === 'started' ? r.dlat : r.plat, ln = r.status === 'started' ? r.dlng : r.plng; return la ? `<a class="btn sec" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=${Number(la)},${Number(ln)}">فتح الملاحة</a>` : ''; })()}${r.status === 'accepted' ? '<button class="btn" data-act="dadv" data-v="arrived">وصلت لنقطة الالتقاء</button><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>' : r.status === 'arrived' ? `<form data-form="dpin" class="card" novalidate>${fld('رمز الرحلة من الراكب (٤ أرقام)', 'pin', 'text', 'required inputmode="numeric" maxlength="4" autocomplete="off"')}<button class="btn" type="submit">بدء الرحلة</button></form><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>` : '<button class="btn" data-act="dadv" data-v="completed">إنهاء الرحلة وتحصيل الأجرة</button>'}`;
+    return `${hdr('الرحلة الحالية', false)}<div class="lmap" id="lmap" dir="ltr"></div><div class="prog">${[0, 1, 2].map(k => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div><div class="card rise"><div class="row"><span>الراكب</span><b>${esc(r.rider || 'راكب')}</b></div><div class="row"><span>من</span><b>${esc(r.pickup)}</b></div><div class="row"><span>إلى</span><b>${esc(r.dest)}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div><div class="row"><span>المسافة</span><b>${esc(r.km)} كم · ${esc(r.mins)} د</b></div></div>${contact(r.rphone, r.unread)}${(() => { const la = r.status === 'started' ? r.dlat : r.plat, ln = r.status === 'started' ? r.dlng : r.plng; return la ? `<a class="btn sec" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=${Number(la)},${Number(ln)}">فتح الملاحة</a>` : ''; })()}${r.status === 'accepted' ? '<button class="btn" data-act="dadv" data-v="arrived">وصلت لنقطة الالتقاء</button><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>' : r.status === 'arrived' ? `<form data-form="dpin" class="card" novalidate>${fld('رمز الرحلة من الراكب (٤ أرقام)', 'pin', 'text', 'required inputmode="numeric" maxlength="4" autocomplete="off"')}<button class="btn" type="submit">بدء الرحلة</button></form><button class="btn sec" data-act="drel">تخلّي عن الرحلة</button>` : '<button class="btn" data-act="dadv" data-v="completed">إنهاء الرحلة وتحصيل الأجرة</button>'}`;
   },
   'd-trips': () => `${hdr('سجل الرحلات', false)}${S.hist === undefined ? LOADING : S.hist.length ? S.hist.map(rideRow).join('') : `<div class="card">${empty('clock', 'لا توجد رحلات سابقة', 'ستجد هنا رحلاتك المكتملة بعد أول رحلة.')}</div>`}`,
   'd-earn': () => `${hdr('الأرباح والعمولات', false)}${S.dstat === undefined ? LOADING : S.dstat ? `<div class="grid2"><div class="stat rise"><small>صافي الأرباح</small><b>${esc(S.dstat.gross - S.dstat.commission)} ج</b></div><div class="stat rise"><small>عمولة سِكّة</small><b>${esc(S.dstat.commission)} ج</b></div><div class="stat rise"><small>الرحلات المكتملة</small><b>${esc(S.dstat.trips)}</b></div><div class="stat rise"><small>تقييمك</small><b>${S.dstat.avg ? esc(S.dstat.avg) : '—'}</b></div></div>` : `<div class="card">${empty('wallet', 'لا توجد أرباح بعد', 'تظهر الأرباح هنا بعد إتمام الرحلات.')}</div>`}`,
@@ -391,12 +379,12 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   /* ----- الراكب (واجهة جاهزة ومقفولة عن الاستخدام العام) ----- */
   'r-gate': () => `${hdr('خدمة الركاب', false)}<div class="card" style="margin-top:40px">${empty('clock', 'خدمة الركاب ستتوفر قريبًا في رشيد', 'نعمل على تجهيز الخدمة لتصلك بأفضل صورة. يمكنك الانضمام إلينا كسائق من الصفحة الرئيسية.')}</div>${btn('العودة إلى الصفحة الرئيسية', 'home')}`,
   'r-start': () => routes['r-home'](),
-  'r-home': () => `<div class="brand" style="padding:16px 0 4px;text-align:right">${logoImg.replace('<img', '<img style="width:48px;height:48px;border-radius:14px"')}<h2 style="font-size:1.2rem">إلى أين تريد الذهاب؟</h2></div>
+  'r-home': () => `<div class="dh rise"><button class="avbtn" data-go="r-prof" aria-label="حسابي">${avatarEl(S.me && S.me.avatar, myName())}</button><div class="fx"><small>مرحبًا ${esc(myName())}</small><h2>إلى أين تريد الذهاب؟</h2></div><button class="ib bell" data-go="notif" aria-label="الإشعارات">${ic('bell')}<i class="nb" hidden></i></button></div>
     ${mapBox()}
     <div class="card" style="padding:6px 14px">${menu('pin', S.ride.plat ? esc(S.ride.pick) : 'موقع الانطلاق', 'r-pick')}${menu('route', S.ride.dlat ? esc(S.ride.dest) : 'الوجهة', 'r-dest')}</div>
     <button class="btn" data-act="rnext">اختيار نوع المركبة</button>`,
-  'r-pick': () => `${hdr('موقع الانطلاق')}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rpick" novalidate>${fld('وصف المكان (اختياري)', 'pick', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
-  'r-dest': () => `${hdr('تحديد الوجهة')}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rdest" novalidate>${fld('وصف المكان (اختياري)', 'dest', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
+  'r-pick': () => `${hdr('موقع الانطلاق')}${msearch()}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rpick" novalidate>${fld('وصف المكان (اختياري)', 'pick', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
+  'r-dest': () => `${hdr('تحديد الوجهة')}${msearch()}<div class="pmap" id="pmap" dir="ltr"><i class="ppin"></i><button type="button" class="ib gps" data-act="gps" aria-label="موقعي الحالي">${ic('pin')}</button></div><p class="note">حرّك الخريطة ليكون الدبوس على المكان المطلوب.</p><form data-form="rdest" novalidate>${fld('وصف المكان (اختياري)', 'dest', 'text', 'maxlength="100"')}<button class="btn" type="submit">تأكيد</button></form>`,
   'r-veh': () => `${hdr('اختر نوع المركبة')}<div class="vgrid" style="grid-template-columns:1fr">${['tuktuk', 'taxi', 'car'].map(k => `<button class="role" style="margin:0" data-act="rveh" data-v="${k}"><span class="big">${ic(k === 'tuktuk' ? 'tuk' : k)}</span><span><b>${VT[k]}</b><span>اختر ${VT[k]} لمشوارك</span></span></button>`).join('')}</div>`,
   'r-price': () => { const q = S.quote, row = (l, v) => `<div class="row"><span>${l}</span><b>${v}</b></div>`;
     return `${hdr('تأكيد الطلب')}<div class="card rise">${row('من', esc(S.ride.pick || '—'))}${row('إلى', esc(S.ride.dest || '—'))}${row('المركبة', VT[S.ride.veh] || '—')}</div>${q === undefined ? LOADING : q && q.total ? `<div class="card rise">${row('المسافة التقريبية', esc(q.km) + ' كم')}${row('الزمن التقريبي', esc(q.min) + ' دقيقة')}${row('سعر البداية', esc(q.base) + ' ج')}${row(`المسافة (${esc(q.per_km)} ج للكيلو)`, esc(q.dist_fee) + ' ج')}${row(`الوقت (${esc(q.per_min)} ج للدقيقة)`, esc(q.time_fee) + ' ج')}${q.veh_mult != 1 ? row('معامل المركبة', '×' + esc(q.veh_mult)) : ''}${q.night_mult != 1 ? row('زيادة الليل', '×' + esc(q.night_mult)) : ''}${q.surge > 1 ? row('زيادة الطلب المرتفع', '×' + esc(q.surge)) : ''}<div class="row" style="font-size:1.15rem"><span>الإجمالي (كاش)</span><b>${esc(q.total)} ج</b></div></div><p class="note">السعر ثابت بعد التأكيد، وقد يُضاف رسم انتظار بعد الدقائق المجانية.</p><button class="btn" data-act="rconfirm">تأكيد الطلب</button>` : `<div class="card">${empty('route', 'تعذّر حساب السعر', S.quoteErr || 'حاول مرة أخرى')}</div>${btn('رجوع', 'r-home', 'sec')}`}`; },
@@ -406,7 +394,7 @@ verify: () => `${hdr('تأكيد البريد الإلكتروني')}
   'r-live': () => {
     const r = S.rd; if (!r) return routes['r-home']();
     const d = r.driver || {}, st = { accepted: ['السائق في الطريق إليك', 'wait'], arrived: ['السائق وصل لنقطة الالتقاء', 'ok'], started: ['الرحلة جارية', 'ok'] }[r.status] || ['—', 'wait'];
-    return `${hdr('متابعة الرحلة', false)}${mapBox('الخريطة المباشرة تتوفر عند ربط خدمة الخرائط')}<div class="card rise"><div class="row"><span>الحالة</span>${pill(st[0], st[1])}</div><div class="row"><span>السائق</span><b>${esc(d.name || '—')}</b></div><div class="row"><span>المركبة</span><b>${esc(d.veh || '—')}</b></div><div class="row"><span>اللوحة</span><b>${esc(d.plate || '—')}</b></div><div class="row"><span>التقييم</span><b>${d.avg ? esc(d.avg) : 'جديد'}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div></div>${r.status !== 'started' ? `<div class="card rise" style="text-align:center"><p>أعطِ هذا الرمز للسائق عند الركوب</p><div class="pin">${String(r.pin || '').split('').map(c => `<b>${esc(c)}</b>`).join('')}</div></div><button class="btn sec" data-act="rcancel">إلغاء الرحلة</button>` : ''}`;
+    return `${hdr('متابعة الرحلة', false)}<div class="lmap" id="lmap" dir="ltr"></div><div class="card rise"><div class="row"><span>الحالة</span>${pill(st[0], st[1])}</div><div class="row"><span>السائق</span><b>${esc(d.name || '—')}</b></div><div class="row"><span>المركبة</span><b>${esc(d.veh || '—')}</b></div><div class="row"><span>اللوحة</span><b>${esc(d.plate || '—')}</b></div><div class="row"><span>التقييم</span><b>${d.avg ? esc(d.avg) : 'جديد'}</b></div><div class="row"><span>الأجرة</span><b>${esc(r.fare)} ج كاش</b></div></div>${contact(d.phone, r.unread)}${r.status !== 'started' ? `<div class="card rise" style="text-align:center"><p>أعطِ هذا الرمز للسائق عند الركوب</p><div class="pin">${String(r.pin || '').split('').map(c => `<b>${esc(c)}</b>`).join('')}</div></div><button class="btn sec" data-act="rcancel">إلغاء الرحلة</button>` : ''}`;
   },
   'r-end': () => `${hdr('انتهت الرحلة', false)}<div class="card rise">${empty('check', 'وصلت إلى وجهتك', `المبلغ المطلوب: ${S.rd ? esc(S.rd.fare) : ''} ج كاش للسائق`)}</div>${btn('قيّم السائق', 'r-rate')}<button class="btn sec" data-act="rskip">تخطي التقييم</button>`,
   'r-rate': () => `${hdr('تقييم السائق')}<form data-form="rate" class="card rise" novalidate><p style="text-align:center">كيف كانت رحلتك؟</p><div class="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-act="star" data-v="${n}" aria-label="${n} نجوم">${ic('star')}</button>`).join('')}</div><label class="f"><span>ملاحظات (اختياري)</span><textarea name="note" rows="3" maxlength="300"></textarea></label><button class="btn" type="submit">إرسال التقييم</button></form>`,
@@ -544,12 +532,17 @@ const forms = {
       let path = null;
       if (S.newAvatar) { const uid = await API.uid(), b = await resizeImg(S.newAvatar, 320, 0.82); path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`; const { error } = await db.storage.from('avatars').upload(path, b, { contentType: 'image/jpeg' }); if (error) throw error; }
       await API.rpc('update_profile', { p_name: nm, p_phone: d.phone.replace(/\s/g, ''), p_avatar: path });
-      S.newAvatar = null; await loadMe(); toast('تم حفظ التغييرات'); back();
+      S.newAvatar = null; S.dpos = null; stopWatch(); hideReq(false); ignored.clear(); await loadMe(); toast('تم حفظ التغييرات'); back();
     });
   },
   chat(f) {
     const m = f.m.value.trim(), r = chatRide(); if (!m || !r) return; f.m.value = '';
     API.rpc('send_message', { p_ride: r.id, p_body: m }).then(() => pullChat()).catch(e => { toast(errMsg(e), true); f.m.value = m; });
+  },
+  msearch(f) {
+    const q = f.q.value.trim(); if (q.length < 3 || !S.map) return;
+    const c = S.cfg, vb = c.lat ? `&viewbox=${c.lng - 0.5},${c.lat + 0.5},${c.lng + 0.5},${c.lat - 0.5}&bounded=1` : '';
+    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ar&countrycodes=eg${vb}&q=${encodeURIComponent(q)}`).then(r => r.json()).then(res => { S.sres = res; $('#sres').innerHTML = res.length ? res.map((x, i) => `<button type="button" class="sr" data-act="sr" data-v="${i}">${ic('pin')}<span>${esc(x.display_name)}</span></button>`).join('') : '<p class="note c">لا توجد نتائج</p>'; }).catch(() => toast('تعذّر البحث، حاول مرة أخرى', true));
   },
   rpick(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.plat = c.lat; S.ride.plng = c.lng; S.ride.pick = fd(f).pick.trim() || 'موقع محدد على الخريطة'; back(); },
   rdest(f) { if (!S.map) return fail('الخريطة غير متاحة، تأكد من الاتصال'); const c = S.map.getCenter(); S.ride.dlat = c.lat; S.ride.dlng = c.lng; S.ride.dest = fd(f).dest.trim() || 'موقع محدد على الخريطة'; back(); },
@@ -591,8 +584,12 @@ const acts = {
 },
   online() {
     if (driverGate()) return toast('لا يمكن تفعيل استقبال الرحلات قبل اعتماد حسابك ومركبتك', true);
-    send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; if (!S.drv.online) S.reqs = []; render(); pollCtl(); });
+    send(async () => { await API.setDriverOnline(!S.drv.online); S.drv.online = !S.drv.online; if (S.drv.online) startWatch(); else { S.reqs = []; hideReq(false); stopWatch(); } if (cur === 'd-home') homeBits(); else render(); pollCtl(); });
   },
+  rqno() { hideReq(true); },
+  rqyes(el) { const id = el.dataset.v; hideReq(false); acts.dacc({ dataset: { v: id } }); },
+  dgps() { if (S.dpos && S.dmap) S.dmap.setView([S.dpos.lat, S.dpos.lng], 16); else { toast('جارٍ تحديد موقعك…'); startWatch(); } },
+  sr(el) { const x = (S.sres || [])[+el.dataset.v]; if (!x || !S.map) return; S.map.setView([+x.lat, +x.lon], 17); $('#sres').innerHTML = ''; const i = document.querySelector('form[data-form="rpick"] input[name=pick], form[data-form="rdest"] input[name=dest]'); if (i && !i.value) i.value = String(x.display_name).split('،')[0].slice(0, 100); },
   pickrole(el) { send(async () => { await API.rpc('set_role', { p_role: el.dataset.v }); await loadMe(); }); },
   retry() { send(async () => { await loadMe(); }); },
   theme() { const nx = { auto: 'light', light: 'dark', dark: 'auto' }[themeMode()]; try { localStorage.setItem(THEME_KEY, nx); } catch (e) {} applyTheme(nx); render(); },
@@ -679,16 +676,20 @@ ENTER.chat = () => { chatLast = 0; pullChat(true); clearInterval(chatT); chatT =
 ENTER.notif = async () => { try { S.notifs = await API.rpc('my_notifications', { p_limit: 40 }); if (cur === 'notif') redraw(); await API.rpc('read_notifications'); S.notifs.unread = 0; document.querySelectorAll('.nb').forEach(b => { b.hidden = true; }); } catch (e) {} };
 ENTER['d-notif'] = ENTER['r-notif'] = ENTER.notif;
 ENTER.account = ENTER['d-me'] = ENTER['r-prof'] = ENTER.profile = () => pushRefresh();
-const _r0 = render; render = function () { if (cur !== 'chat') { clearInterval(chatT); chatT = null; } if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
+ENTER['d-home'] = () => { initDMap(); homeBits(); loadStats(); };
+ENTER['r-live'] = () => initLMap('rider');
+ENTER['d-cur'] = () => initLMap('driver');
+const _r0 = render; render = function () { if (cur !== 'd-home') killMap('dmap'); if (cur !== 'r-live' && cur !== 'd-cur') { killMap('lmap'); S.lcar = null; } if (cur !== 'chat') { clearInterval(chatT); chatT = null; } if (S.map && cur !== 'r-pick' && cur !== 'r-dest') { try { S.map.remove(); } catch (e) {} S.map = null; } _r0(); const e = ENTER[cur]; if (e) e(); };
 let pollT = null, lastSig = '';
 function stopPoll() { clearInterval(pollT); pollT = null; lastSig = ''; }
 async function loadCfg() { try { S.cfg = await API.rpc('app_config'); CONFIG.riderEnabled = S.cfg.rider_enabled === true; if (cur === 'r-gate' && riderOpen()) go('r-home', true); } catch (e) { console.error('cfg', e); } }
 async function syncRider() {
-  const r = await API.rpc('my_ride'), sig = JSON.stringify(r); S.rd = r;
+  const r = await API.rpc('my_ride'); let sig = 'null', dl = null; if (r) { const { dloc, ...rest } = r; dl = dloc; sig = JSON.stringify(rest); } S.rd = r;
   const want = !r ? null : r.status === 'requested' ? 'r-search' : r.status === 'completed' ? 'r-end' : 'r-live';
   if (want && cur !== want && !(want === 'r-end' && cur === 'r-rate')) go(want, true);
   else if (want && sig !== lastSig && cur === want) render();
   else if (!r && ['r-search', 'r-live', 'r-end'].includes(cur)) { go('r-home', true); toast('انتهى الطلب'); }
+  if (dl && cur === 'r-live') moveCar(dl);
   lastSig = sig;
 }
 async function syncDriver() {
@@ -699,17 +700,15 @@ async function syncDriver() {
   }
   if (!S.drv.online) return;
   const q = await API.rpc('open_requests');
-  if (JSON.stringify(q) !== JSON.stringify(S.reqs)) {
-    const more = q.length > S.reqs.length; S.reqs = q;
-    if (more) { toast('وصلك طلب جديد'); try { navigator.vibrate && navigator.vibrate(200); } catch (e) {} }
-    if (cur === 'd-req') render();
-  }
+  if (JSON.stringify(q) !== JSON.stringify(S.reqs)) { S.reqs = q; if (cur === 'd-req') render(); else if (cur === 'd-home') paintReqs(); }
+  if (S.reqShown && !q.some(x => x.id === S.reqShown)) hideReq(false);
+  if (!S.reqShown && cur !== 'd-cur') { const nx = q.find(x => !ignored.has(x.id)); if (nx) offerReq(nx); }
 }
 async function startSession() {
   await loadCfg(); pollCtl();
   try {
     if (riderOpen()) await syncRider();
-    if (S.hasDriver && S.drv.online) { const r = await API.rpc('driver_ride'); if (r) { S.dr = r; go('d-cur', true); } }
+    if (S.hasDriver && S.drv.online) { startWatch(); const r = await API.rpc('driver_ride'); if (r) { S.dr = r; go('d-cur', true); } }
   } catch (e) { console.error('session', e); }
   offerPush(); pushRefresh();
   const g = new URLSearchParams(location.search).get('go'); if (g) { try { history.replaceState(null, '', location.pathname); } catch (e) {} openTarget({ url: g }); }
@@ -782,6 +781,51 @@ async function offerPush() {
     localStorage.setItem('sekka_push_asked', '1');
     setTimeout(() => { const s = $('#sheet'); s.innerHTML = `<div><h3>فعّل الإشعارات</h3><p>لتصلك ${S.me && S.me.role === 'driver' ? 'الطلبات الجديدة' : 'تحديثات رحلتك ورسائل السائق'} حتى لو التطبيق مقفول.</p><button class="btn" data-act="pushyes">تفعيل الإشعارات</button><button class="btn sec" data-act="close">لاحقًا</button></div>`; s.hidden = false; }, 1500);
   } catch (e) {}
+}
+const tiles = m => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+const mkIcon = k => L.divIcon({ className: 'mkw', html: `<div class="mk ${k}">${k === 'car' ? ic('car') : k === 'flag' ? ic('flag') : ''}</div>`, iconSize: [38, 38], iconAnchor: [19, k === 'car' || k === 'me' ? 19 : 38] });
+const killMap = k => { if (S[k]) { try { S[k].remove(); } catch (e) {} S[k] = null; } };
+let watchId = null, lastPing = 0;
+function onPos(p, center) {
+  S.dpos = { lat: p.coords.latitude, lng: p.coords.longitude };
+  if (S.dmark) { S.dmark.setLatLng([S.dpos.lat, S.dpos.lng]); if (center && S.dmap) S.dmap.setView([S.dpos.lat, S.dpos.lng], 16); }
+  if (S.lmap && cur === 'd-cur') moveCar(S.dpos);
+  const t = Date.now(); if ((S.drv.online || S.dr) && t - lastPing > 6000) { lastPing = t; API.rpc('driver_ping', { p_lat: S.dpos.lat, p_lng: S.dpos.lng }).catch(() => {}); }
+}
+function startWatch() { if (watchId !== null || !navigator.geolocation) return; watchId = navigator.geolocation.watchPosition(p => onPos(p, !S.dpos), e => { if (e.code === 1) toast('فعّل الموقع عشان تستقبل الطلبات', true); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }); }
+function stopWatch() { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch (e) {} watchId = null; } }
+function initDMap() {
+  const el = $('#dmap'); if (!el) return; killMap('dmap');
+  if (typeof L === 'undefined') { el.innerHTML = '<p class="note c" style="padding:90px 16px">تعذّر تحميل الخريطة، تأكد من الاتصال</p>'; return; }
+  const c = S.dpos ? [S.dpos.lat, S.dpos.lng] : [S.cfg.lat || 31.4042, S.cfg.lng || 30.417];
+  S.dmap = L.map(el, { zoomControl: false }).setView(c, 15); tiles(S.dmap); S.dmark = L.marker(c, { icon: mkIcon('me') }).addTo(S.dmap);
+  if (!S.dpos && navigator.geolocation) navigator.geolocation.getCurrentPosition(p => onPos(p, true), () => {}, { enableHighAccuracy: true, timeout: 8000 });
+}
+function initLMap(who) {
+  const el = $('#lmap'); killMap('lmap'); S.lcar = null; const r = who === 'rider' ? S.rd : S.dr; if (!el || !r || !r.plat) return;
+  if (typeof L === 'undefined') { el.innerHTML = '<p class="note c" style="padding:80px 16px">تعذّر تحميل الخريطة</p>'; return; }
+  const pa = [r.plat, r.plng], pb = [r.dlat, r.dlng], pts = [pa, pb];
+  S.lmap = L.map(el, { zoomControl: false }); tiles(S.lmap);
+  L.polyline([pa, pb], { color: '#10b981', weight: 4, dashArray: '6 8' }).addTo(S.lmap); L.marker(pa, { icon: mkIcon('pin') }).addTo(S.lmap); L.marker(pb, { icon: mkIcon('flag') }).addTo(S.lmap);
+  const d = who === 'rider' ? r.dloc : S.dpos; if (d) { moveCar(d); pts.push([d.lat, d.lng]); }
+  S.lmap.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+}
+function moveCar(p) { if (!S.lmap || !p) return; if (!S.lcar) S.lcar = L.marker([p.lat, p.lng], { icon: mkIcon('car') }).addTo(S.lmap); else S.lcar.setLatLng([p.lat, p.lng]); }
+function homeBits() {
+  const e = $('#dstate'); if (e) e.innerHTML = `<span class="live ${S.drv.online ? 'on' : ''}"><i></i>${S.drv.online ? 'أنت متصل الآن' : 'أنت غير متصل'}</span><button class="switch ${S.drv.online ? 'on' : ''}" data-act="online" role="switch" aria-checked="${S.drv.online}" aria-label="حالة الاتصال"></button>`;
+  paintReqs();
+}
+function paintReqs() { const e = $('#dreqs'); if (e) e.innerHTML = reqsHtml(); }
+async function loadStats() { try { S.dstat = await API.rpc('driver_stats'); } catch (e) { return; } const e = $('#dstats'); if (e) e.innerHTML = statsHtml(); }
+const ignored = new Set(); let reqT = null;
+function hideReq(ign) { clearInterval(reqT); const o = $('#reqo'); if (o) o.classList.remove('on'); if (ign && S.reqShown) ignored.add(S.reqShown); S.reqShown = null; }
+function offerReq(r) {
+  S.reqShown = r.id; let o = $('#reqo');
+  if (!o) { o = document.createElement('div'); o.id = 'reqo'; o.className = 'reqo'; o.setAttribute('role', 'alertdialog'); o.setAttribute('aria-label', 'طلب جديد'); document.body.appendChild(o); }
+  let c = 25;
+  o.innerHTML = `<div class="reqc"><div class="row"><h2>طلب مشوار جديد</h2><span class="cd" id="rcd">${c}</span></div><div class="ln"><i class="d1"></i><span><small>من</small><b>${esc(r.pickup)}</b></span></div><div class="ln"><i class="d2"></i><span><small>إلى</small><b>${esc(r.dest)}</b></span></div><div class="trio"><div><small>المسافة</small><b>${esc(r.km)} كم</b></div><div><small>الزمن</small><b>${esc(r.mins)} د</b></div><div class="fare"><small>الأجرة كاش</small><b>${esc(r.fare)} ج</b></div></div><div class="row"><button class="btn sec" data-act="rqno">رفض</button><button class="btn" data-act="rqyes" data-v="${esc(r.id)}">قبول</button></div></div>`;
+  requestAnimationFrame(() => o.classList.add('on')); beep(880, 0.18, 3); try { navigator.vibrate && navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {}
+  clearInterval(reqT); reqT = setInterval(() => { c--; const e = $('#rcd'); if (e) e.textContent = c; if (c > 0 && c % 8 === 0) beep(880, 0.15, 2); if (c <= 0) hideReq(true); }, 1000);
 }
 let polling = false;
 async function runPoll() {
