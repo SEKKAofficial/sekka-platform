@@ -1,4 +1,4 @@
-const CACHE_NAME = "sekka-pwa-v6";
+const CACHE_NAME = "sekka-pwa-v7";
 const SB_CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
 const APP_SHELL = ["./", "./index.html", "./style.css", "./script.js", "./pwa-install.css", "./pwa-install.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-maskable-192.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 
@@ -17,6 +17,26 @@ self.addEventListener("activate", (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith("sekka-pwa-") && k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (_) {}
+  const req = d.kind === "ride_request";
+  event.waitUntil(self.registration.showNotification(d.title || "سِكّة", {
+    body: d.body || "", icon: "./icon-192.png", badge: "./icon-192.png", dir: "rtl", lang: "ar",
+    tag: (d.kind || "n") + ":" + ((d.data && d.data.ride) || d.id || ""), renotify: true,
+    vibrate: req ? [300, 120, 300, 120, 300] : [150], requireInteraction: req, data: d.data || {}
+  }));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  event.waitUntil((async () => {
+    const cs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (cs.length) { await cs[0].focus(); cs[0].postMessage({ type: "open", data }); }
+    else await self.clients.openWindow("./" + (data.url ? "?go=" + encodeURIComponent(data.url) : ""));
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
